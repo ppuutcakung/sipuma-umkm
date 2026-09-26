@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>SIPUMA — PPU UT Cakung</title>
+  <meta name="description" content="Sistem Informasi Pendataan &amp; Manajemen UMKM binaan PPU UT Cakung.">
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ══════════════ LAYAR MUAT ══════════════ -->
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="brand-mark"><i class="bi bi-graph-up-arrow"></i></div>
+    <div class="spinner"></div>
+    <p class="mt-3 text-muted" id="loadingText">Memuat SIPUMA...</p>
+  </div>
+
+  <!-- ══════════════ HALAMAN LOGIN ══════════════ -->
+  <div id="loginPage" class="login-wrapper" style="display:none;">
+    <div class="login-shell">
+      <div class="login-side">
+        <div>
+          <span class="badge-csr"><i class="bi bi-patch-check-fill"></i> Program CSR United Tractors</span>
+          <h2>Akselerasi &amp; Kemandirian<br><span class="accent">UMKM Binaan</span></h2>
+          <p class="desc">Sistem Informasi Pendataan &amp; Manajemen UMKM (SIPUMA) merupakan platform yang dikembangkan oleh PPU UT Cakung untuk memonitoring perkembangan UMKM binaan.</p>
+        </div>
+        <div class="mt-3">
+          <div class="login-feature"><div class="num">1</div><span class="txt">Data Master 4 Sektor Usaha (Kuliner, Kerajinan, Pertanian, Manufaktur)</span></div>
+          <div class="login-feature"><div class="num">2</div><span class="txt">Pelaporan Omset Berkala &amp; Penyerapan Tenaga Kerja Lokal</span></div>
+          <div class="login-feature"><div class="num">3</div><span class="txt">Asesmen 3 Pilar (Produksi, Pemasaran, Keuangan) Otomatis</span></div>
+          <div class="login-feature"><div class="num">4</div><span class="txt">Pelaporan UMKM berprestasi &amp; agenda fasilitasi CSR</span></div>
+        </div>
+      </div>
+
+      <div class="login-form-side">
+        <div class="mb-3">
+          <div class="d-flex align-center gap-2 mb-2">
+            <div class="logo-badge" style="width:32px;height:32px;border-radius:8px;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;"><i class="bi bi-graph-up-arrow"></i></div>
+            <div>
+              <div style="font-weight:800;font-size:15px;">SIPUMA <span class="text-muted" style="font-weight:500;font-size:11px;">v3.0</span></div>
+            </div>
+          </div>
+          <h5 style="margin:0;">Masuk ke Akun Anda</h5>
+          <p class="text-muted" style="font-size:12.5px;margin-top:4px;">Pilih peran akses sesuai otorisasi Anda pada sistem SIPUMA</p>
+        </div>
+
+        <div class="role-tabs">
+          <button type="button" class="role-tab active" data-role="UMKM" onclick="pilihRoleLogin('UMKM')"><i class="bi bi-shop"></i> UMKM Binaan</button>
+          <button type="button" class="role-tab" data-role="Admin" onclick="pilihRoleLogin('Admin')"><i class="bi bi-shield-lock"></i> Admin/PIC</button>
+          <button type="button" class="role-tab" data-role="UT" onclick="pilihRoleLogin('UT')"><i class="bi bi-bar-chart-line"></i> CSR United Tractors</button>
+        </div>
+
+        <form id="loginForm">
+          <div class="form-group">
+            <label class="form-label" id="lblUsername">Nama Lengkap UMKM Binaan</label>
+            <div class="input-group-icon">
+              <i class="bi bi-person"></i>
+              <input type="text" class="form-control" id="loginUsername" placeholder="Masukkan nama UMKM" autocomplete="username" required>
+            </div>
+            <div class="login-hint" id="hintUsername">Sesuai dengan nama usaha yang terdaftar di Data Master SIPUMA.</div>
+          </div>
+          <div class="form-group">
+            <div class="d-flex flex-between">
+              <label class="form-label" id="lblPassword">Kode Unik Sektor (Password)</label>
+              <span class="login-hint" id="formatHint">Format: KUL/KRJ/PTN/MFG + 4 Angka</span>
+            </div>
+            <div class="input-group-icon">
+              <i class="bi bi-lock"></i>
+              <input type="password" class="form-control" id="loginPassword" placeholder="********" autocomplete="current-password" required style="padding-left:36px;padding-right:40px;">
+              <button type="button" onclick="toggleLihatPassword()" id="btnToggleLihatPassword" title="Lihat/sembunyikan password" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);padding:4px;z-index:2;">
+                <i class="bi bi-eye" id="iconToggleLihatPassword" style="position:static;left:auto;top:auto;transform:none;"></i>
+              </button>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block" id="loginSubmitBtn" style="padding:11px;">
+            <span id="loginBtnText">Masuk Sebagai UMKM</span> <i class="bi bi-arrow-right"></i>
+          </button>
+          <div id="loginError" class="mt-3" style="display:none;background:var(--pemula-bg);color:var(--pemula-text);padding:10px 14px;border-radius:8px;font-size:12.5px;"></div>
+        </form>
+        <div class="d-flex flex-between mt-4" style="font-size:11.5px;color:var(--text-muted);">
+          <span>PPU UT Cakung (c) 2026</span>
+          <span>Pengelola Pembinaan UMKM</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════ APLIKASI UTAMA ══════════════ -->
+  <div id="appBody" class="app-body">
+    <div class="sidebar-scrim" id="sidebarScrim" onclick="closeSidebar()"></div>
+    <nav id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo-badge"><i class="bi bi-graph-up-arrow"></i></div>
+        <div>
+          <div class="brand-name">SIPUMA</div>
+          <div class="brand-sub">by PPU UT Cakung</div>
+        </div>
+      </div>
+      <div class="sidebar-status" id="sidebarStatus"></div>
+      <ul class="sidebar-nav" id="sidebarNav"></ul>
+      <div class="sidebar-footer">
+        <a class="nav-link" onclick="navigateTo('pengaturan')"><i class="bi bi-gear"></i> <span>Pengaturan Akun</span></a>
+        <a class="nav-link logout" onclick="handleLogout()"><i class="bi bi-box-arrow-left"></i> <span>Keluar (Logout)</span></a>
+      </div>
+    </nav>
+
+    <div class="main-wrap">
+      <div class="topbar">
+        <div class="topbar-left">
+          <button class="hamburger-btn" onclick="toggleSidebar()"><i class="bi bi-list"></i></button>
+          <span class="context-chip" id="ctxChip"><i class="bi bi-building"></i> SIPUMA</span>
+          <span class="context-sep">|</span>
+          <span class="context-sub" id="ctxSub">Memuat konteks...</span>
+        </div>
+        <div class="topbar-right">
+          <span class="role-badge" id="roleBadge">Role</span>
+          <div class="icon-btn"><i class="bi bi-bell"></i><span class="dot-alert"></span></div>
+          <div class="user-chip" onclick="navigateTo('pengaturan')">
+            <div class="avatar-circle" id="avatarCircle">--</div>
+            <div class="d-none-mobile" style="line-height:1.1;">
+              <div class="u-name" id="userChipName">-</div>
+              <div class="u-role" id="userChipRole">-</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="content-area" id="app-container"></div>
+
+      <div class="app-footer">
+        <span><i class="bi bi-geo-alt"></i> Cakung, Kota Jakarta Timur, DKI Jakarta - Binaan PPU UT Cakung</span>
+        <span id="footerVersion">v3.0-API (c) 2026 SIPUMA</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════ MODAL ══════════════ -->
+  <div class="modal-backdrop-c" id="modalGeneric">
+    <div class="modal-box" id="modalGenericBox">
+      <div class="modal-box-header">
+        <h5 id="modalGenericTitle">Judul Modal</h5>
+        <button class="modal-close-x" onclick="closeModal('modalGeneric')"><i class="bi bi-x-lg"></i></button>
+      </div>
+      <div class="modal-box-body" id="modalGenericBody"></div>
+      <div class="modal-box-footer" id="modalGenericFooter"></div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop-c" id="modalConfirm">
+    <div class="modal-box" style="max-width:400px;">
+      <div class="modal-box-header">
+        <h5><i class="bi bi-exclamation-triangle text-primary-c"></i> Konfirmasi</h5>
+        <button class="modal-close-x" onclick="closeModal('modalConfirm')"><i class="bi bi-x-lg"></i></button>
+      </div>
+      <div class="modal-box-body"><p id="modalConfirmText">Apakah Anda yakin?</p></div>
+      <div class="modal-box-footer">
+        <button class="btn btn-outline" onclick="closeModal('modalConfirm')">Batal</button>
+        <button class="btn btn-danger" id="modalConfirmBtn">Ya, Lanjutkan</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop-c" id="modalPreview">
+    <div class="modal-box modal-lg">
+      <div class="modal-box-header">
+        <h5 id="modalPreviewTitle">Pratinjau Dokumen</h5>
+        <button class="modal-close-x" onclick="closeModal('modalPreview')"><i class="bi bi-x-lg"></i></button>
+      </div>
+      <div class="modal-box-body" style="padding:0;"><div id="modalPreviewContent" style="min-height:70vh;"></div></div>
+      <div class="modal-box-footer">
+        <button class="btn btn-outline" onclick="closeModal('modalPreview')">Tutup</button>
+        <a class="btn btn-primary" id="modalPreviewDownload" href="#" target="_blank"><i class="bi bi-download"></i> Unduh</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-stack" id="toastStack"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
+
+  <!-- ⚠️ Urutan pemuatan WAJIB seperti ini:
+       config → api → ui → compat → auth → dashboard → halaman → app
+       compat.js harus SEBELUM halaman.js (menyediakan jembatan API),
+       dan app.js terakhir (memulai aplikasi setelah semua siap). -->
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/compat.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/halaman.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
