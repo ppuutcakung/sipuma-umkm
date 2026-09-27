@@ -315,6 +315,7 @@ function renderOmsetForm(role, kodeUmkm) {
       </div>
       <div id="omsetFormArea"><div class="loading-inline"><div class="spinner"></div></div></div>
     </div>
+    <div id="closingOmsetArea"></div>
     ${role === 'Admin' ? `
     <div class="panel">
       <div class="flex-between" style="flex-wrap:wrap;gap:8px;"><div class="panel-title mb-0">Rekap Omset Seluruh UMKM</div>${tombolEkspor('eksporRekapOmset')}</div>
@@ -408,6 +409,9 @@ function gantiTahunOmset(role) {
   const kodeUmkm = role === 'Admin' ? document.getElementById('omsetUmkmSelect').value : AppState.session.idUmkm;
   const tahun = document.getElementById('omsetTahunSelect').value;
   muatFormOmset(kodeUmkm, tahun);
+  // Status closing berbeda per tahun — panelnya wajib ikut diperbarui,
+  // kalau tidak statusnya akan tertinggal di tahun sebelumnya.
+  muatPanelClosing(kodeUmkm, tahun, 'Omset', 'closingOmsetArea');
   if (role === 'Admin') muatRekapOmset(tahun, 1);
 }
 
@@ -490,7 +494,6 @@ function muatFormOmset(kodeUmkm, tahun) {
       <div class="flex-between" style="border-top:1px solid var(--border-color);padding-top:14px;margin-top:6px;">
         <div class="text-muted" style="font-size:12.5px;">Total Realisasi: <b style="color:var(--text-primary)">${formatRupiahFull(d ? d.TotalRealisasi : 0)}</b> ${d ? `<span class="status-pill ${d.StatusTarget === 'Tercapai' ? 'tercapai' : 'belumtercapai'}" style="margin-left:6px;"><span class="dot"></span>${d.StatusTarget}</span>` : ''}</div>
         <button class="btn btn-primary" id="btnSimpanOmset" onclick="simpanOmset('${kodeUmkm}', ${tahun})"><i class="bi bi-save"></i> Simpan Omset</button>
-        <div id="closingOmsetArea"></div>
       </div>
     `;
   }, () => {
@@ -589,7 +592,7 @@ function renderTenagaKerjaForm(role, kodeUmkm) {
         ${role === 'Admin' ? `<div class="form-group"><label class="form-label">Pilih UMKM</label>${dropdownUmkmCari('tkUmkmSelect', kodeUmkm, "renderTenagaKerjaForm('Admin', document.getElementById('tkUmkmSelect').value)")}</div>` : ''}
         <div class="grid grid-2">
           <div class="form-group"><label class="form-label">Bulan</label><select class="form-select" id="tkBulan">${optionsHtml(BULAN_LIST)}</select></div>
-          <div class="form-group"><label class="form-label">Tahun</label><select class="form-select" id="tkTahun">${optionsHtml([2025,2026,2027], tahun)}</select></div>
+          <div class="form-group"><label class="form-label">Tahun</label><select class="form-select" id="tkTahun" onchange="muatPanelClosing('${kodeUmkm}', this.value, 'TenagaKerja', 'closingTkArea'); muatTabelTenagaKerja('${kodeUmkm}', this.value);">${optionsHtml([2025,2026,2027], tahun)}</select></div>
         </div>
         <div class="form-group"><label class="form-label">Jumlah Tenaga Kerja</label><input type="number" min="0" class="form-control" id="tkJumlah" placeholder="Contoh: 6"></div>
         <div class="form-group"><label class="form-label">Catatan (opsional)</label><textarea class="form-control" id="tkCatatan" placeholder="Contoh: +2 karyawan baru warga RW 04"></textarea></div>
