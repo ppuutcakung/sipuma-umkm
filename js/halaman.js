@@ -1812,19 +1812,19 @@ function renderUserAksesTabel(halaman) {
 }
 
 function formEditUser(u) {
-  // Username Admin dikunci karena dipakai sebagai penanda akun utama
-  // sistem. Username Stakeholder (UT) DAPAT diubah — akun ini akan dipakai
-  // berbagai pihak, bukan hanya satu lembaga tertentu.
-  const fixedUsername = (u.Role === 'Admin');
+  // Username akun sistem (Admin & Stakeholder) dikunci — di TAMPILAN
+  // maupun di SERVER. Keduanya harus sejalan: pernah terjadi tampilan
+  // dibuka tetapi server tetap mengunci, sehingga penyimpanan terlihat
+  // berhasil padahal namanya tidak berubah.
+  // Penggantian dilakukan lewat fungsi gantiUsernameStakeholder() di Kode.gs.
+  const fixedUsername = (u.Role === 'Admin' || u.Role === 'UT');
   const body = `
     <input type="hidden" id="fuOriginal" value="${esc(u.Username)}">
     <div class="form-group"><label class="form-label">Username</label>
       <input class="form-control" id="fuUsername" value="${esc(u.Username)}" ${fixedUsername ? 'disabled' : ''}>
       <div class="login-hint">${fixedUsername
-        ? 'Username akun Admin tidak dapat diubah.'
-        : (u.Role === 'UT'
-            ? 'Username ini dipakai untuk login. Setelah diubah, sampaikan username baru kepada yang bersangkutan.'
-            : 'Untuk UMKM, username mengikuti nama usaha di Data Master.')}</div></div>
+        ? 'Username akun sistem dikunci. Penggantian dilakukan oleh pengelola lewat Apps Script.'
+        : 'Untuk UMKM, username mengikuti nama usaha di Data Master.'}</div></div>
     <div class="form-group"><label class="form-label">Catatan / Alasan Pemblokiran</label><textarea class="form-control" id="fuCatatan">${esc(u.AlasanPemblokiran || '')}</textarea></div>
 
     <div class="panel mt-3" style="background:var(--canvas);">

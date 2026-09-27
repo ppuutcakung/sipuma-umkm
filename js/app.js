@@ -32,7 +32,7 @@ function renderShellPeran() {
   document.getElementById('ctxChip').innerHTML = '<i class="bi bi-building"></i> ' +
     (s.role === 'UMKM' ? esc(s.username)
       : s.role === 'UT' ? 'UMKM Binaan'                      // akun lintas lembaga — sengaja umum
-      : 'UMKM Binaan CSR United Tractors');                  // Admin/PIC: identitas internal tetap
+      : 'UMKM Binaan PPU/LPB');                              // Admin/PIC
   document.getElementById('ctxSub').textContent = {
     Admin: 'Panel Administrasi & Pengelolaan Data',
     UT: 'Panel Pemantauan Program',
