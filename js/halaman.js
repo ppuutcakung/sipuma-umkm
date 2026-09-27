@@ -1816,8 +1816,22 @@ function formEditUser(u) {
   const body = `
     <input type="hidden" id="fuOriginal" value="${esc(u.Username)}">
     <div class="form-group"><label class="form-label">Username</label><input class="form-control" id="fuUsername" value="${esc(u.Username)}" ${fixedUsername ? 'disabled' : ''}></div>
-    <div class="form-group"><label class="form-label">Password Baru ${u.Role === 'UMKM' ? '(Kode Unik — tidak dapat diubah)' : ''}</label><input class="form-control" id="fuPassword" placeholder="${u.Role === 'UMKM' ? 'Tidak dapat diubah' : 'Kosongkan jika tidak ingin mengubah password'}" ${u.Role === 'UMKM' ? 'disabled' : ''}></div>
     <div class="form-group"><label class="form-label">Catatan / Alasan Pemblokiran</label><textarea class="form-control" id="fuCatatan">${esc(u.AlasanPemblokiran || '')}</textarea></div>
+
+    <div class="panel mt-3" style="background:var(--canvas);">
+      <div class="panel-title mb-0" style="font-size:13px;">Reset Password</div>
+      <div class="text-muted mb-2" style="font-size:11.5px;">
+        Password tersimpan dalam bentuk terenkripsi dan tidak dapat dibaca siapa pun —
+        termasuk Admin. Bila pengguna lupa password, buatkan yang baru di sini,
+        lalu sampaikan kepada yang bersangkutan.
+      </div>
+      <div class="d-flex gap-2" style="flex-wrap:wrap;">
+        <input class="form-control" id="fuPasswordBaru" placeholder="Password baru (minimal 6 karakter)" style="flex:1;min-width:200px;">
+        <button class="btn btn-outline" id="btnResetPassword" onclick="resetPasswordUser('${esc(u.Username)}')">
+          <i class="bi bi-key"></i> Terapkan
+        </button>
+      </div>
+    </div>
   `;
   const footer = `<button class="btn btn-outline" onclick="closeModal('modalGeneric')">Batal</button><button class="btn btn-primary" id="btnSimpanUser" onclick="simpanEditUser()"><i class="bi bi-save"></i> Simpan</button>`;
   openFormModal('Edit User: ' + u.Username, body, footer);
@@ -1827,7 +1841,9 @@ function simpanEditUser() {
   const record = {
     originalUsername: document.getElementById('fuOriginal').value,
     Username: document.getElementById('fuUsername').value.trim(),
-    KodeUnik: document.getElementById('fuPassword').value.trim(),
+    // Password TIDAK lagi dikirim lewat sini. Sejak password disimpan
+    // dalam bentuk hash, kolom KodeUnik tidak lagi dipakai untuk login —
+    // penggantian password memakai action resetPassword tersendiri.
     AlasanPemblokiran: document.getElementById('fuCatatan').value.trim()
   };
   setBtnLoading(btn);
@@ -2069,4 +2085,36 @@ function bukaClosingPeriode(kodeUmkm, tahun, jenis, idArea) {
         }
       }, function () { showToast('Error', 'Gagal membuka kunci.', 'danger'); });
     }, 'Ya, Buka Kunci');
+}
+
+
+/** Reset password seorang pengguna — hanya Admin. */
+function resetPasswordUser(username) {
+  const btn = document.getElementById('btnResetPassword');
+  const baru = document.getElementById('fuPasswordBaru').value.trim();
+  if (baru.length < 6) {
+    showToast('Peringatan', 'Password baru minimal 6 karakter.', 'warning');
+    return;
+  }
+  showConfirm(
+    'Ganti password <b>' + esc(username) + '</b> menjadi:<br><br>' +
+    '<code style="background:var(--canvas);padding:4px 8px;border-radius:5px;">' + esc(baru) + '</code><br><br>' +
+    'Catat password ini sekarang — setelah disimpan, <b>tidak akan bisa dibaca lagi</b> ' +
+    'karena tersimpan dalam bentuk terenkripsi.',
+    function () {
+      closeModal('modalConfirm');
+      setBtnLoading(btn, 'Menerapkan...');
+      panggilServerAman('resetPassword', [username, baru], function (res) {
+        resetBtn(btn);
+        if (res.success) {
+          showToast('Berhasil', res.message, 'success');
+          document.getElementById('fuPasswordBaru').value = '';
+        } else {
+          showToast('Gagal', res.message, 'danger');
+        }
+      }, function () {
+        resetBtn(btn);
+        showToast('Error', 'Gagal mengubah password.', 'danger');
+      });
+    }, 'Ya, Ganti Password');
 }
