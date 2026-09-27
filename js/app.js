@@ -200,7 +200,68 @@ function panelPengaturanAplikasi() {
       '<button class="btn btn-primary" id="btnSimpanAplikasi" onclick="simpanPengaturanAplikasi()"><i class="bi bi-save"></i> Simpan Identitas Aplikasi</button>' +
       '<button class="btn btn-outline" onclick="resetIdentitasAplikasi()">Kembalikan ke Bawaan</button>' +
     '</div>' +
+  '</div>' +
+
+  '<div class="panel mt-4">' +
+    '<div class="panel-title">Cadangan Data (Backup)</div>' +
+    '<div class="panel-sub">Unduh salinan seluruh data aplikasi tanpa perlu membuka Google Drive.</div>' +
+    '<div class="d-flex gap-2 mt-3" style="flex-wrap:wrap;">' +
+      '<button class="btn btn-primary" id="btnBackupExcel" onclick="unduhBackup(\'excel\')">' +
+        '<i class="bi bi-file-earmark-excel"></i> Unduh Cadangan (Excel)</button>' +
+      '<button class="btn btn-outline" id="btnBackupJson" onclick="unduhBackup(\'json\')">' +
+        '<i class="bi bi-filetype-json"></i> Unduh Cadangan (JSON)</button>' +
+    '</div>' +
+    '<div class="text-muted mt-3" style="font-size:11.5px;background:var(--canvas);padding:9px 12px;border-radius:8px;">' +
+      '<b>Excel</b> — satu berkas berisi banyak lembar, mudah dibaca dan diperiksa.<br>' +
+      '<b>JSON</b> — salinan mentah yang lebih lengkap, cocok bila suatu saat perlu dipulihkan.<br>' +
+      '<b>Demi keamanan,</b> berkas cadangan <b>tidak menyertakan password</b> maupun data sesi login. ' +
+      'Cadangan ini untuk arsip data, bukan untuk memulihkan akun.' +
+    '</div>' +
   '</div>';
+}
+
+/** Unduh cadangan seluruh data aplikasi. */
+function unduhBackup(format) {
+  const btn = document.getElementById(format === 'json' ? 'btnBackupJson' : 'btnBackupExcel');
+  setBtnLoading(btn, 'Menyiapkan...');
+  panggilServerAman('getBackupData', [], function (res) {
+    resetBtn(btn);
+    if (!res.success) { showToast('Gagal', res.message || 'Gagal menyiapkan cadangan.', 'danger'); return; }
+    const d = res.data;
+    const stempel = new Date().toISOString().slice(0, 10);
+
+    if (format === 'json') {
+      unduhBerkas(JSON.stringify(d, null, 2), 'Backup-SIPUMA-' + stempel + '.json', 'application/json');
+      showToast('Berhasil', 'Cadangan JSON berhasil diunduh (' + d.jumlahSheet + ' lembar data).', 'success');
+      return;
+    }
+
+    // Excel banyak lembar: tiap <table> menjadi satu worksheet, urut sesuai daftar nama.
+    const namaSheet = Object.keys(d.sheets);
+    let tabelSemua = '';
+    namaSheet.forEach(function (nama) {
+      const s = d.sheets[nama];
+      tabelSemua += bangunTabelEkspor('Data: ' + nama, s.headers.length ? s.headers : ['(kosong)'],
+        s.rows, null, 'Jumlah baris: ' + s.rows.length);
+    });
+
+    const isi =
+      '<html xmlns:o="urn:schemas-microsoft-com:office:office" ' +
+      'xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">' +
+      '<head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets>' +
+      namaSheet.map(function (n) {
+        return '<x:ExcelWorksheet><x:Name>' + n.substring(0, 30) + '</x:Name>' +
+               '<x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet>';
+      }).join('') +
+      '</x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body>' +
+      tabelSemua + '</body></html>';
+
+    unduhBerkas(isi, 'Backup-SIPUMA-' + stempel + '.xls', 'application/vnd.ms-excel');
+    showToast('Berhasil', 'Cadangan Excel berhasil diunduh (' + d.jumlahSheet + ' lembar data).', 'success');
+  }, function () {
+    resetBtn(btn);
+    showToast('Error', 'Gagal mengambil data cadangan dari server.', 'danger');
+  });
 }
 
 async function simpanPengaturanAplikasi() {

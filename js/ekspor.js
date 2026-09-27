@@ -186,10 +186,10 @@ function eksporDataMasterUMKM(format) {
   const rows = (AppState.cache.umkm || []).slice().sort(function (a, b) {
     return new Date(b.TanggalBinaan || 0) - new Date(a.TanggalBinaan || 0);
   });
-  const kolom = ['No', 'Kode Unik', 'Nama UMKM', 'Sektor', 'Spesialisasi', 'Alamat Usaha', 'Binaan Sejak', 'Status'];
-  const lebar = [5, 12, 28, 14, 24, 32, 14, 12];
+  const kolom = ['No', 'Nama UMKM', 'Sektor', 'Spesialisasi', 'Alamat Usaha', 'Binaan Sejak', 'Status'];
+  const lebar = [5, 28, 14, 24, 32, 14, 12];
   const baris = rows.map(function (u, i) {
-    return [i + 1, u.KodeUnik, u.NamaUMKM, u.SektorUsaha, u.Spesialisasi || '-',
+    return [i + 1, u.NamaUMKM, u.SektorUsaha, u.Spesialisasi || '-',
             u.AlamatUsaha || '-', formatBulanTahun(u.TanggalBinaan),
             (typeof umkmAktif === 'function' && umkmAktif(u)) ? 'Aktif' : 'Tidak Aktif'];
   });
@@ -204,12 +204,12 @@ function eksporRekapOmset(format) {
   const semua = AppState.cache.omsetAll || [];
   const rows = semua.filter(function (r) { return Number(r.Tahun) === Number(tahun); });
 
-  const kolom = ['No', 'Nama UMKM', 'Kode Unik', 'Target Omset', 'Total Realisasi', 'Capaian (%)', 'Status'];
-  const lebar = [5, 28, 12, 18, 18, 12, 16];
+  const kolom = ['No', 'Nama UMKM', 'Target Omset', 'Total Realisasi', 'Capaian (%)', 'Status'];
+  const lebar = [5, 30, 18, 18, 12, 16];
   const baris = rows.map(function (r, i) {
     const target = Number(r.TargetOmsetTahunan) || 0;
     const real = Number(r.TotalRealisasi) || 0;
-    return [i + 1, r.NamaUMKM, r.IDUMKM, formatRupiahFull(target), formatRupiahFull(real),
+    return [i + 1, r.NamaUMKM, formatRupiahFull(target), formatRupiahFull(real),
             target ? Math.round(real / target * 100) + '%' : '-', r.StatusTarget || '-'];
   });
   jalankanEkspor(format, 'Rekap Omset Seluruh UMKM', kolom, baris, lebar, 'Tahun ' + tahun);
@@ -232,14 +232,14 @@ function eksporRekapTenagaKerja(format) {
           (Number(t.Tahun) === Number(terbaru.Tahun) &&
            BULAN_LIST.indexOf(t.Bulan) > BULAN_LIST.indexOf(terbaru.Bulan))) terbaru = t;
     });
-    return [i + 1, u.NamaUMKM, u.KodeUnik, u.SektorUsaha,
+    return [i + 1, u.NamaUMKM, u.SektorUsaha,
             terbaru ? (terbaru.Bulan + ' ' + terbaru.Tahun) : 'Belum ada data',
             terbaru ? Number(terbaru.JumlahTenagaKerja) : 0];
-  }).sort(function (a, b) { return b[5] - a[5]; })
+  }).sort(function (a, b) { return b[4] - a[4]; })
     .map(function (r, i) { r[0] = i + 1; return r; });
 
-  const kolom = ['No', 'Nama UMKM', 'Kode Unik', 'Sektor', 'Bulan Input Terakhir', 'Jumlah Tenaga Kerja'];
-  const lebar = [5, 28, 12, 14, 20, 18];
+  const kolom = ['No', 'Nama UMKM', 'Sektor', 'Bulan Input Terakhir', 'Jumlah Tenaga Kerja'];
+  const lebar = [5, 30, 14, 20, 18];
   jalankanEkspor(format, 'Rekap Tenaga Kerja Seluruh UMKM', kolom, baris, lebar,
     filterSektor ? 'Sektor: ' + filterSektor : 'Seluruh sektor');
 }
@@ -247,11 +247,11 @@ function eksporRekapTenagaKerja(format) {
 /** Rekap Asesmen Kemandirian */
 function eksporRekapAsesmen(format) {
   const rows = AppState.cache.kemandirianAll || [];
-  const kolom = ['No', 'Nama UMKM', 'Kode Unik', 'Produksi', 'Pemasaran', 'Keuangan',
+  const kolom = ['No', 'Nama UMKM', 'Produksi', 'Pemasaran', 'Keuangan',
                  'Rata-Rata', 'Kelas', 'Bulan Asesmen', 'Asesor'];
-  const lebar = [5, 26, 12, 10, 11, 11, 11, 14, 16, 18];
+  const lebar = [5, 28, 10, 11, 11, 11, 14, 16, 18];
   const baris = rows.map(function (r, i) {
-    return [i + 1, r.NamaUMKM, r.IDUMKM, r.SkorProduksi, r.SkorPemasaran, r.SkorKeuangan,
+    return [i + 1, r.NamaUMKM, r.SkorProduksi, r.SkorPemasaran, r.SkorKeuangan,
             r.RataRata, r.Kelas, formatBulanTahun(r.TanggalAsesmen), r.Asesor || '-'];
   });
   jalankanEkspor(format, 'Rekap Asesmen Kemandirian UMKM', kolom, baris, lebar,
@@ -268,11 +268,11 @@ function eksporLegalitas(format) {
     return (a.SisaHari === null ? 99999 : a.SisaHari) - (b.SisaHari === null ? 99999 : b.SisaHari);
   });
 
-  const kolom = ['No', 'Nama UMKM', 'Kode Unik', 'Jenis Legalitas', 'Nomor',
+  const kolom = ['No', 'Nama UMKM', 'Jenis Legalitas', 'Nomor',
                  'Penerbit', 'Tanggal Terbit', 'Masa Berlaku', 'Status'];
-  const lebar = [5, 26, 12, 24, 22, 20, 15, 28, 18];
+  const lebar = [5, 28, 24, 22, 20, 15, 28, 18];
   const baris = rows.map(function (l, i) {
-    return [i + 1, l.NamaUMKM, l.IDUMKM, l.JenisLegalitas, l.NomorLegalitas || '-',
+    return [i + 1, l.NamaUMKM, l.JenisLegalitas, l.NomorLegalitas || '-',
             l.Penerbit || '-', l.TanggalTerbit ? formatTgl(l.TanggalTerbit) : '-',
             (typeof keteranganMasaBerlaku === 'function' ? keteranganMasaBerlaku(l) : ''), l.Status];
   });

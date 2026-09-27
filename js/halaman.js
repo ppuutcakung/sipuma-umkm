@@ -39,6 +39,11 @@ function renderMasterUmkm(filterSektor) {
             <option value="">Semua Sektor</option>
             ${optionsHtml(SEKTOR_LIST, filterSektor)}
           </select>
+          <select class="form-select" id="masterUmkmFilterStatus" style="width:auto;height:34px;" onchange="renderMasterUmkmTabel(1)">
+            <option value="">Semua Status</option>
+            <option value="aktif">Hanya Aktif</option>
+            <option value="nonaktif">Hanya Tidak Aktif</option>
+          </select>
           <div class="input-group-icon" style="width:220px;">
             <i class="bi bi-search"></i>
             <input type="text" class="form-control" id="masterUmkmCari" style="height:34px;" placeholder="Cari nama/kode UMKM..." oninput="renderMasterUmkmTabel(1)">
@@ -71,6 +76,9 @@ function renderMasterUmkmTabel(halaman) {
     return new Date(b.TanggalBinaan || 0) - new Date(a.TanggalBinaan || 0);
   });
   if (filterSektor) rows = rows.filter(r => r.SektorUsaha === filterSektor);
+  const fStatus = document.getElementById('masterUmkmFilterStatus') ? document.getElementById('masterUmkmFilterStatus').value : '';
+  if (fStatus === 'aktif')    rows = rows.filter(u => umkmAktif(u));
+  if (fStatus === 'nonaktif') rows = rows.filter(u => !umkmAktif(u));
   if (kataKunci && kataKunci.trim()) {
     const k = kataKunci.trim().toLowerCase();
     rows = rows.filter(r => String(r.NamaUMKM).toLowerCase().includes(k) || String(r.KodeUnik).toLowerCase().includes(k));
@@ -1324,7 +1332,8 @@ function renderOmsetUTPage(tahun) {
       <div class="table-toolbar">
         <div class="d-flex gap-2 align-center">
           <label class="form-label mb-0">Tahun</label>
-          <select class="form-select" style="width:auto;height:34px;" onchange="renderOmsetUTPage(this.value)">${optionsHtml([2025,2026,2027], tahun)}</select>
+          <select class="form-select" id="omsetTahunSelect" style="width:auto;height:34px;" onchange="renderOmsetUTPage(this.value)">${optionsHtml([2025,2026,2027], tahun)}</select>
+          ${tombolEkspor('eksporRekapOmset')}
         </div>
       </div>
       <div id="rekapOmsetArea"><div class="loading-inline"><div class="spinner"></div></div></div>
@@ -1947,50 +1956,82 @@ function muatPanelClosing(kodeUmkm, tahun, jenis, idArea) {
   }, function () { area.innerHTML = ''; });
 }
 
+const PENANDA_CLOSING_GLOBAL = '__SEMUA_UMKM__';
+
 function renderPanelClosing(kodeUmkm, tahun, jenis, idArea, status) {
   const area = document.getElementById(idArea);
   if (!area) return;
   const terkunci = jenis === 'Omset' ? status.omset : status.tenagaKerja;
+  const olehAdminSerentak = jenis === 'Omset' ? status.globalOmset : status.globalTenagaKerja;
   const isAdmin = AppState.session.role === 'Admin';
   const labelData = jenis === 'Omset' ? 'omset' : 'tenaga kerja';
 
+  // ── Sudah terkunci ──
   if (terkunci) {
+    const sumber = olehAdminSerentak
+      ? 'Dikunci serentak oleh Admin untuk <b>seluruh UMKM</b>.'
+      : 'Dikunci oleh UMKM ini sendiri (self closing).';
     area.innerHTML =
       '<div class="panel mt-3" style="background:var(--pramandiri-bg);border-left:4px solid var(--pramandiri-accent);">' +
         '<div class="d-flex flex-between align-center" style="flex-wrap:wrap;gap:10px;">' +
           '<div style="font-size:13px;color:var(--pramandiri-text);">' +
             '<b><i class="bi bi-lock-fill"></i> Periode ' + tahun + ' sudah dikunci (closing).</b><br>' +
-            '<span style="font-size:12px;">Data ' + labelData + ' tahun ini tidak dapat diubah lagi.' +
+            '<span style="font-size:12px;">' + sumber + ' Data ' + labelData + ' tahun ini tidak dapat diubah lagi.' +
             (isAdmin ? '' : ' Hubungi Admin bila ada yang perlu diperbaiki.') + '</span>' +
           '</div>' +
           (isAdmin
-            ? '<button class="btn btn-outline btn-sm" onclick="bukaClosingPeriode(\'' + kodeUmkm + '\',' + tahun + ',\'' + jenis + '\',\'' + idArea + '\')">' +
-              '<i class="bi bi-unlock"></i> Buka Kunci</button>'
+            ? '<div class="d-flex gap-2" style="flex-wrap:wrap;">' +
+                (olehAdminSerentak
+                  ? '<button class="btn btn-outline btn-sm" onclick="bukaClosingPeriode(\'' + PENANDA_CLOSING_GLOBAL + '\',' + tahun + ',\'' + jenis + '\',\'' + idArea + '\')">' +
+                    '<i class="bi bi-unlock"></i> Buka Kunci Semua</button>'
+                  : '<button class="btn btn-outline btn-sm" onclick="bukaClosingPeriode(\'' + kodeUmkm + '\',' + tahun + ',\'' + jenis + '\',\'' + idArea + '\')">' +
+                    '<i class="bi bi-unlock"></i> Buka Kunci UMKM Ini</button>') +
+              '</div>'
             : '') +
         '</div></div>';
     return;
   }
 
+  // ── Belum terkunci ──
+  // UMKM  : hanya bisa mengunci datanya sendiri
+  // Admin : bisa mengunci UMKM terpilih, ATAU seluruh UMKM sekaligus
   area.innerHTML =
     '<div class="panel mt-3" style="background:var(--canvas);">' +
       '<div class="d-flex flex-between align-center" style="flex-wrap:wrap;gap:10px;">' +
-        '<div style="font-size:12.5px;">' +
+        '<div style="font-size:12.5px;flex:1;min-width:220px;">' +
           '<b>Closing Periode ' + tahun + '</b><br>' +
-          '<span class="text-muted" style="font-size:11.5px;">Kunci data ' + labelData + ' tahun ' + tahun +
-          ' bila pengisian sudah lengkap sampai Desember. Setelah dikunci, data tidak dapat diubah lagi.</span>' +
+          '<span class="text-muted" style="font-size:11.5px;">' +
+            (isAdmin
+              ? 'Kunci data ' + labelData + ' tahun ' + tahun + '. Pilih <b>UMKM Ini</b> untuk mengunci satu UMKM saja, ' +
+                'atau <b>Seluruh UMKM</b> untuk mengunci semuanya sekaligus di akhir tahun.'
+              : 'Kunci data ' + labelData + ' tahun ' + tahun + ' bila pengisian Anda sudah lengkap sampai Desember. ' +
+                'Setelah dikunci, data tidak dapat diubah lagi kecuali dibuka oleh Admin.') +
+          '</span>' +
         '</div>' +
-        '<button class="btn btn-outline btn-sm" onclick="lakukanClosing(\'' + kodeUmkm + '\',' + tahun + ',\'' + jenis + '\',\'' + idArea + '\')">' +
-          '<i class="bi bi-lock"></i> Closing Periode</button>' +
+        '<div class="d-flex gap-2" style="flex-wrap:wrap;">' +
+          '<button class="btn btn-outline btn-sm" onclick="lakukanClosing(\'' + kodeUmkm + '\',' + tahun + ',\'' + jenis + '\',\'' + idArea + '\')">' +
+            '<i class="bi bi-lock"></i> ' + (isAdmin ? 'Closing UMKM Ini' : 'Closing Periode') + '</button>' +
+          (isAdmin
+            ? '<button class="btn btn-danger btn-sm" onclick="lakukanClosing(\'' + PENANDA_CLOSING_GLOBAL + '\',' + tahun + ',\'' + jenis + '\',\'' + idArea + '\')">' +
+              '<i class="bi bi-lock-fill"></i> Closing Seluruh UMKM</button>'
+            : '') +
+        '</div>' +
       '</div></div>';
 }
 
 function lakukanClosing(kodeUmkm, tahun, jenis, idArea) {
   const labelData = jenis === 'Omset' ? 'omset' : 'tenaga kerja';
+  const global = kodeUmkm === PENANDA_CLOSING_GLOBAL;
   showConfirm(
-    'Kunci data <b>' + labelData + ' tahun ' + tahun + '</b>?<br><br>' +
-    'Setelah dikunci, data tahun ini <b>tidak dapat diubah lagi</b> — termasuk oleh Admin, ' +
-    'kecuali Admin membukanya kembali.<br><br>' +
-    'Pastikan pengisian sudah lengkap sampai bulan Desember sebelum melanjutkan.',
+    (global
+      ? 'Kunci data <b>' + labelData + ' tahun ' + tahun + '</b> untuk <b>SELURUH UMKM</b>?<br><br>' +
+        'Setelah ini, <b>tidak ada satu pun UMKM</b> yang dapat mengubah data tahun ' + tahun + ' — ' +
+        'dan Admin pun ikut terkunci sampai membukanya kembali.<br><br>' +
+        'Gunakan ini hanya saat tutup tahun, setelah memastikan seluruh UMKM selesai mengisi.'
+      : 'Kunci data <b>' + labelData + ' tahun ' + tahun + '</b>?<br><br>' +
+        'Setelah dikunci, data tahun ini <b>tidak dapat diubah lagi</b> — termasuk oleh Admin, ' +
+        'kecuali Admin membukanya kembali.<br><br>' +
+        'Pastikan pengisian sudah lengkap sampai bulan Desember sebelum melanjutkan.'),
     function () {
       closeModal('modalConfirm');
       panggilServerAman('setClosing', [kodeUmkm, tahun, jenis], function (res) {
@@ -2004,7 +2045,7 @@ function lakukanClosing(kodeUmkm, tahun, jenis, idArea) {
           showToast('Gagal', res.message, 'danger');
         }
       }, function () { showToast('Error', 'Gagal melakukan closing.', 'danger'); });
-    }, 'Ya, Kunci Periode');
+    }, global ? 'Ya, Kunci Semua' : 'Ya, Kunci Periode');
 }
 
 function bukaClosingPeriode(kodeUmkm, tahun, jenis, idArea) {
