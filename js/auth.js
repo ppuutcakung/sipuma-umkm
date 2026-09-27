@@ -22,12 +22,12 @@ const TEKS_ROLE = {
     tombol: 'Masuk Sebagai Admin'
   },
   UT: {
-    labelUser: 'Username Tim CSR United Tractors',
-    placeholderUser: 'Masukkan username tim CSR',
-    hintUser: 'Akun pemantauan program CSR United Tractors.',
+    labelUser: 'Username Stakeholder',
+    placeholderUser: 'Masukkan username stakeholder',
+    hintUser: 'Akun pemantauan program (hanya dapat melihat data).',
     labelPass: 'Password',
     formatHint: '',
-    tombol: 'Masuk Sebagai CSR UT'
+    tombol: 'Masuk Sebagai Stakeholder'
   }
 };
 

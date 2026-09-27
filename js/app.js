@@ -13,10 +13,13 @@ function renderShellPeran() {
       (m.badge ? '<span class="nav-badge">' + esc(m.badge) + '</span>' : '') + '</a></li>';
   }).join('');
 
-  const labelRole = { Admin: 'Admin / PIC', UT: 'CSR United Tractors', UMKM: 'Pelaku UMKM (Binaan)' }[s.role] || s.role;
+  // Tiga label dibedakan agar tiap tempat menampilkan keterangan yang tepat:
+  // lencana peran di topbar, tagline di bawah nama pengguna, dan status sesi.
+  const labelRole    = { Admin: 'Admin / PIC', UT: 'Stakeholder', UMKM: 'Pelaku UMKM (Binaan)' }[s.role] || s.role;
+  const labelTagline = { Admin: 'Admin / PIC', UT: 'read-only',   UMKM: 'Pelaku UMKM (Binaan)' }[s.role] || s.role;
   document.getElementById('roleBadge').textContent = labelRole;
   document.getElementById('userChipName').textContent = s.username;
-  document.getElementById('userChipRole').textContent = labelRole;
+  document.getElementById('userChipRole').textContent = labelTagline;
 
   const inisial = String(s.username || '?').trim().substring(0, 2).toUpperCase();
   const avatar = document.getElementById('avatarCircle');
@@ -27,10 +30,12 @@ function renderShellPeran() {
   }
 
   document.getElementById('ctxChip').innerHTML = '<i class="bi bi-building"></i> ' +
-    (s.role === 'UMKM' ? esc(s.username) : 'UMKM Binaan CSR United Tractors');
+    (s.role === 'UMKM' ? esc(s.username)
+      : s.role === 'UT' ? 'UMKM Binaan'                      // akun lintas lembaga — sengaja umum
+      : 'UMKM Binaan CSR United Tractors');                  // Admin/PIC: identitas internal tetap
   document.getElementById('ctxSub').textContent = {
     Admin: 'Panel Administrasi & Pengelolaan Data',
-    UT: 'Panel Pemantauan Program CSR',
+    UT: 'Panel Pemantauan Program',
     UMKM: 'Panel Pelaporan Usaha'
   }[s.role] || '';
 
@@ -529,7 +534,7 @@ function simpanPeriodeAktif() {
 
   showConfirm(
     'Jadikan <b>tahun ' + tahun + '</b> sebagai periode aktif aplikasi?<br><br>' +
-    'Seluruh pengguna (Admin, CSR UT, dan UMKM) akan melihat data tahun ini secara bawaan, ' +
+    'Seluruh pengguna (Admin, Stakeholder, dan UMKM) akan melihat data tahun ini secara bawaan, ' +
     'dan kolom isian tahun ' + tahun + ' siap digunakan.<br><br>' +
     '<b>Data tahun sebelumnya tetap tersimpan</b> dan masih bisa dilihat lewat filter Tahun Data.',
     function () {

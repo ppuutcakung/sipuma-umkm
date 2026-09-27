@@ -1532,7 +1532,7 @@ function renderLaporanCsr(rows, isAdmin, tahunFilter) {
 
   const container = document.getElementById('app-container');
   container.innerHTML = `
-    ${pageHeader('Arsip Resmi', isAdmin ? 'Laporan CSR' : 'File Laporan', isAdmin ? '(PDF)' : 'PPU', 'Laporan bulanan resmi program CSR yang dapat diakses oleh Tim CSR United Tractors.', filterHtml)}
+    ${pageHeader('Arsip Resmi', isAdmin ? 'Laporan CSR' : 'File Laporan', isAdmin ? '(PDF)' : 'PPU', 'Laporan bulanan resmi program yang dapat diakses oleh Stakeholder.', filterHtml)}
     <div class="grid grid-2">
       ${rows.length ? rows.map(f => `
         <div class="file-item">
@@ -1798,7 +1798,7 @@ function renderUserAksesTabel(halaman) {
             <td>
               <button class="action-icon-btn primary" title="Edit" onclick='formEditUser(${JSON.stringify(u)})'><i class="bi bi-pencil"></i></button>
               <button class="action-icon-btn ${u.StatusAksesLogin === 'Allowed' ? 'danger' : ''}" title="${u.StatusAksesLogin === 'Allowed' ? 'Blokir' : 'Buka Akses'}" onclick="toggleAkses('${esc(u.Username)}','${u.StatusAksesLogin}')"><i class="bi bi-${u.StatusAksesLogin === 'Allowed' ? 'lock' : 'unlock'}"></i></button>
-              ${(u.Username !== 'Admin' && u.Username !== 'Tim CSR UT') ? `<button class="action-icon-btn danger" title="Hapus" onclick="hapusUser('${esc(u.Username)}')"><i class="bi bi-trash"></i></button>` : ''}
+              ${(u.Role !== 'Admin' && u.Role !== 'UT') ? `<button class="action-icon-btn danger" title="Hapus" onclick="hapusUser('${esc(u.Username)}')"><i class="bi bi-trash"></i></button>` : `<span class="text-muted" style="font-size:10.5px;" title="Akun sistem tidak dapat dihapus"><i class="bi bi-shield-lock"></i></span>`}
             </td>
           </tr>`).join('') : `<tr><td colspan="7"><div class="table-empty"><i class="bi bi-inbox"></i>${kataKunci ? 'Tidak ada user yang cocok.' : 'Belum ada data user.'}</div></td></tr>`}
         </tbody>
@@ -1812,10 +1812,19 @@ function renderUserAksesTabel(halaman) {
 }
 
 function formEditUser(u) {
-  const fixedUsername = (u.Role === 'Admin' || u.Role === 'UT');
+  // Username Admin dikunci karena dipakai sebagai penanda akun utama
+  // sistem. Username Stakeholder (UT) DAPAT diubah — akun ini akan dipakai
+  // berbagai pihak, bukan hanya satu lembaga tertentu.
+  const fixedUsername = (u.Role === 'Admin');
   const body = `
     <input type="hidden" id="fuOriginal" value="${esc(u.Username)}">
-    <div class="form-group"><label class="form-label">Username</label><input class="form-control" id="fuUsername" value="${esc(u.Username)}" ${fixedUsername ? 'disabled' : ''}></div>
+    <div class="form-group"><label class="form-label">Username</label>
+      <input class="form-control" id="fuUsername" value="${esc(u.Username)}" ${fixedUsername ? 'disabled' : ''}>
+      <div class="login-hint">${fixedUsername
+        ? 'Username akun Admin tidak dapat diubah.'
+        : (u.Role === 'UT'
+            ? 'Username ini dipakai untuk login. Setelah diubah, sampaikan username baru kepada yang bersangkutan.'
+            : 'Untuk UMKM, username mengikuti nama usaha di Data Master.')}</div></div>
     <div class="form-group"><label class="form-label">Catatan / Alasan Pemblokiran</label><textarea class="form-control" id="fuCatatan">${esc(u.AlasanPemblokiran || '')}</textarea></div>
 
     <div class="panel mt-3" style="background:var(--canvas);">
