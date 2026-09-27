@@ -25,7 +25,7 @@ const KATEGORI_PRESTASI = [
   'Lainnya'
 ];
 
-const TIER_LIST = ['Pemula', 'Madya', 'Pramandiri', 'Mandiri'];
+const TIER_LIST = ['Pemula', 'Madya', 'Pra Mandiri', 'Mandiri'];
 
 // Kunci penyimpanan sesi di browser
 const KUNCI_SESI = 'sipuma_sesi_v3';

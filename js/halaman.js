@@ -65,7 +65,11 @@ function renderMasterUmkmTabel(halaman) {
   const kataKunci = document.getElementById('masterUmkmCari') ? document.getElementById('masterUmkmCari').value : '';
   halaman = halaman || 1;
 
-  let rows = AppState.cache.umkm || [];
+  // Urutkan dari UMKM yang PALING BARU dibina ke yang paling lama,
+  // agar penambahan terbaru langsung terlihat di halaman pertama.
+  let rows = (AppState.cache.umkm || []).slice().sort(function (a, b) {
+    return new Date(b.TanggalBinaan || 0) - new Date(a.TanggalBinaan || 0);
+  });
   if (filterSektor) rows = rows.filter(r => r.SektorUsaha === filterSektor);
   if (kataKunci && kataKunci.trim()) {
     const k = kataKunci.trim().toLowerCase();
@@ -83,7 +87,7 @@ function renderMasterUmkmTabel(halaman) {
   area.innerHTML = `
       <div style="overflow-x:auto;">
       <table class="sipuma-table">
-        <thead><tr><th>Kode Unik</th><th>Nama UMKM</th><th>Sektor</th><th>Spesialisasi</th><th>Binaan Sejak</th><th>Aksi</th></tr></thead>
+        <thead><tr><th>Kode Unik</th><th>Nama UMKM</th><th>Sektor</th><th>Spesialisasi</th><th>Binaan Sejak</th><th>Status</th><th>Aksi</th></tr></thead>
         <tbody>
           ${rowsHalamanIni.length ? rowsHalamanIni.map(u => `
             <tr>
@@ -93,10 +97,14 @@ function renderMasterUmkmTabel(halaman) {
               <td>${esc(u.Spesialisasi)}</td>
               <td>${formatBulanTahun(u.TanggalBinaan)}</td>
               <td>
+                <span class="status-pill ${umkmAktif(u) ? 'allowed' : 'blocked'}"><span class="dot"></span>${umkmAktif(u) ? 'Aktif' : 'Tidak Aktif'}</span>
+              </td>
+              <td>
                 <button class="action-icon-btn primary" title="Ubah" onclick='formUMKM(${JSON.stringify(u)})'><i class="bi bi-pencil"></i></button>
+                <button class="action-icon-btn ${umkmAktif(u) ? 'danger' : ''}" title="${umkmAktif(u) ? 'Nonaktifkan' : 'Aktifkan'}" onclick="ubahStatusAktifUMKM('${u.KodeUnik}', ${umkmAktif(u) ? 'false' : 'true'})"><i class="bi bi-${umkmAktif(u) ? 'toggle-on' : 'toggle-off'}"></i></button>
                 <button class="action-icon-btn danger" title="Hapus" onclick="hapusUMKM('${u.KodeUnik}')"><i class="bi bi-trash"></i></button>
               </td>
-            </tr>`).join('') : `<tr><td colspan="6"><div class="table-empty"><i class="bi bi-inbox"></i>${kataKunci ? 'Tidak ada UMKM yang cocok dengan pencarian.' : 'Belum ada data UMKM.'}</div></td></tr>`}
+            </tr>`).join('') : `<tr><td colspan="7"><div class="table-empty"><i class="bi bi-inbox"></i>${kataKunci ? 'Tidak ada UMKM yang cocok dengan pencarian.' : 'Belum ada data UMKM.'}</div></td></tr>`}
         </tbody>
       </table>
       </div>
@@ -1216,7 +1224,7 @@ function renderPrestasiTabel(halaman) {
       <div style="overflow-x:auto;">
       <table class="sipuma-table">
         <thead><tr><th>UMKM</th><th>Kategori</th><th>Deskripsi</th><th>Periode</th><th>Dicatat</th><th>Aksi</th></tr></thead>
-        <tbody>${rowsHalamanIni.length ? rowsHalamanIni.map(r => `<tr><td><b>${esc(r.NamaUMKM)}</b></td><td><span class="sector-tag">${esc(r.KategoriPrestasi)}</span></td><td style="max-width:340px;">${esc(r.DeskripsiPrestasi)}</td><td>${esc(r.Bulan)} ${esc(r.Tahun)}</td><td class="text-muted">${formatTgl(r.TanggalPencatatan)}</td><td><button class="action-icon-btn primary" title="Ubah" onclick='formPrestasi(${JSON.stringify(r)})'><i class="bi bi-pencil"></i></button><button class="action-icon-btn danger" title="Hapus" onclick="hapusPrestasi('${r.ID}')"><i class="bi bi-trash"></i></button></td></tr>`).join('') : `<tr><td colspan="6"><div class="table-empty"><i class="bi bi-inbox"></i>${kataKunci ? 'Tidak ada catatan yang cocok.' : 'Belum ada catatan prestasi.'}</div></td></tr>`}</tbody>
+        <tbody>${rowsHalamanIni.length ? rowsHalamanIni.map(r => `<tr><td><b>${esc(r.NamaUMKM)}</b></td><td><span class="sector-tag">${esc(r.KategoriPrestasi)}</span></td><td style="max-width:340px;">${esc(r.DeskripsiPrestasi)}</td><td>${esc(r.Bulan)} ${esc(r.Tahun)}</td><td class="text-muted">${formatTgl(r.TanggalPencatatan)}</td><td><button class="action-icon-btn primary" title="Ubah" onclick='formPrestasi(${JSON.stringify(r)})'><i class="bi bi-pencil"></i></button><button class="action-icon-btn danger" title="Hapus" onclick="hapusPrestasi('${r.ID}')"><i class="bi bi-trash"></i></button></td></tr>`).join('') : `<tr><td colspan="7"><div class="table-empty"><i class="bi bi-inbox"></i>${kataKunci ? 'Tidak ada catatan yang cocok.' : 'Belum ada catatan prestasi.'}</div></td></tr>`}</tbody>
       </table>
       </div>
       ${totalHalaman > 1 ? `
@@ -1755,7 +1763,7 @@ function renderUserAksesTabel(halaman) {
               <button class="action-icon-btn ${u.StatusAksesLogin === 'Allowed' ? 'danger' : ''}" title="${u.StatusAksesLogin === 'Allowed' ? 'Blokir' : 'Buka Akses'}" onclick="toggleAkses('${esc(u.Username)}','${u.StatusAksesLogin}')"><i class="bi bi-${u.StatusAksesLogin === 'Allowed' ? 'lock' : 'unlock'}"></i></button>
               ${(u.Username !== 'Admin' && u.Username !== 'Tim CSR UT') ? `<button class="action-icon-btn danger" title="Hapus" onclick="hapusUser('${esc(u.Username)}')"><i class="bi bi-trash"></i></button>` : ''}
             </td>
-          </tr>`).join('') : `<tr><td colspan="6"><div class="table-empty"><i class="bi bi-inbox"></i>${kataKunci ? 'Tidak ada user yang cocok.' : 'Belum ada data user.'}</div></td></tr>`}
+          </tr>`).join('') : `<tr><td colspan="7"><div class="table-empty"><i class="bi bi-inbox"></i>${kataKunci ? 'Tidak ada user yang cocok.' : 'Belum ada data user.'}</div></td></tr>`}
         </tbody>
       </table>
       </div>
@@ -1860,3 +1868,33 @@ function hapusUser(username) {
 // ════════════════════════════════════════════════════════
 // PENGATURAN (Admin & UT — edit foto & alamat)
 // ════════════════════════════════════════════════════════
+
+// ════════════════════════════════════════════════════════
+// AKTIFKAN / NONAKTIFKAN UMKM (Data Master)
+// ════════════════════════════════════════════════════════
+function ubahStatusAktifUMKM(kodeUnik, jadikanAktif) {
+  const umkm = (AppState.cache.umkm || []).find(function (u) { return u.KodeUnik === kodeUnik; });
+  const nama = umkm ? umkm.NamaUMKM : kodeUnik;
+
+  const pesan = jadikanAktif
+    ? 'Aktifkan kembali <b>' + esc(nama) + '</b>? UMKM ini akan kembali dihitung di Dashboard Utama.'
+    : 'Nonaktifkan <b>' + esc(nama) + '</b>?<br><br>Seluruh datanya <b>tetap tersimpan</b> dan tidak ada yang dihapus — ' +
+      'UMKM ini hanya tidak lagi dihitung pada widget Total UMKM (Aktif) di Dashboard.';
+
+  showConfirm(pesan, function () {
+    closeModal('modalConfirm');
+    panggilServerAman('setStatusAktifUMKM', [kodeUnik, !!jadikanAktif], function (res) {
+      if (res.success) {
+        showToast('Berhasil', res.message, 'success');
+        // Perbarui cache lokal agar tabel langsung ikut berubah
+        if (umkm) umkm.StatusAktif = jadikanAktif ? 'Aktif' : 'Tidak Aktif';
+        AppState.cache.dashboardOrganisasi = null;  // paksa dashboard hitung ulang
+        renderMasterUmkmTabel(1);
+      } else {
+        showToast('Gagal', res.message, 'danger');
+      }
+    }, function () {
+      showToast('Error', 'Gagal mengubah status. Silakan coba lagi.', 'danger');
+    });
+  }, jadikanAktif ? 'Ya, Aktifkan' : 'Ya, Nonaktifkan');
+}

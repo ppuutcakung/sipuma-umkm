@@ -154,5 +154,7 @@ function masukKeAplikasi() {
   document.getElementById('loginPage').style.display = 'none';
   document.getElementById('appBody').classList.add('ready');
   renderShellPeran();
+  terapkanIdentitasAplikasi();   // judul, tagline, logo, footer, warna
+  mulaiPantauServer();           // indikator sambungan server
   navigateTo('dashboard');
 }

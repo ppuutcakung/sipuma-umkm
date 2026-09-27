@@ -105,7 +105,7 @@ function optionsHtml(list, terpilih) {
 }
 
 function tierClass(nama) {
-  return { 'Pemula': 'pemula', 'Madya': 'madya', 'Pramandiri': 'pramandiri', 'Mandiri': 'mandiri' }[nama] || 'madya';
+  return { 'Pemula': 'pemula', 'Madya': 'madya', 'Pra Mandiri': 'pramandiri', 'Pramandiri': 'pramandiri', 'Mandiri': 'mandiri' }[nama] || 'madya';
 }
 
 // ── Kepala halaman ──
@@ -195,4 +195,60 @@ function toggleSidebar() {
 function closeSidebar() {
   document.getElementById('sidebar').classList.remove('show');
   document.getElementById('sidebarScrim').classList.remove('show');
+}
+
+// ── Status aktif UMKM ──
+/** UMKM dianggap AKTIF kecuali ditandai tidak aktif secara eksplisit.
+ *  Baris lama (sebelum kolom StatusAktif ada) bernilai kosong → tetap aktif. */
+function umkmAktif(u) {
+  const v = u && u.StatusAktif;
+  if (v === '' || v === null || v === undefined) return true;
+  if (v === false) return false;
+  const s = String(v).trim().toLowerCase();
+  return !(s === 'false' || s === 'tidak aktif' || s === 'nonaktif' || s === 'no' || s === '0');
+}
+
+// ════════════════════════════════════════════════════════
+// INDIKATOR SAMBUNGAN SERVER
+// ════════════════════════════════════════════════════════
+let _statusServer = 'memeriksa';
+
+function setIndikatorServer(status, keterangan) {
+  _statusServer = status;
+  const el = document.getElementById('indikatorServer');
+  if (!el) return;
+  const peta = {
+    terhubung:  { warna: '#059669', ikon: 'wifi',     teks: 'Server Terhubung' },
+    lambat:     { warna: '#D97706', ikon: 'wifi-1',   teks: 'Sambungan Lambat' },
+    terputus:   { warna: '#DC2626', ikon: 'wifi-off', teks: 'Server Terputus' },
+    memeriksa:  { warna: '#94A3B8', ikon: 'arrow-repeat', teks: 'Memeriksa...' }
+  };
+  const p = peta[status] || peta.memeriksa;
+  el.innerHTML = '<span class="dot" style="background:' + p.warna + ';"></span>' +
+    '<i class="bi bi-' + p.ikon + '" style="color:' + p.warna + ';"></i> ' +
+    '<span style="color:' + p.warna + ';font-weight:600;">' + p.teks + '</span>' +
+    (keterangan ? '<span class="text-muted" style="font-size:10.5px;margin-left:4px;">' + esc(keterangan) + '</span>' : '');
+  el.title = 'Status sambungan ke server SIPUMA';
+}
+
+/** Periksa sambungan ke server dan perbarui indikatornya. */
+async function periksaSambunganServer() {
+  if (!AppState.session) return;
+  setIndikatorServer('memeriksa');
+  const mulai = Date.now();
+  const res = await panggilAPI('ping', [], { percobaan: 1 });
+  const lama = Date.now() - mulai;
+  if (res && res.success) {
+    setIndikatorServer(lama > 3000 ? 'lambat' : 'terhubung', lama + ' ms');
+  } else {
+    setIndikatorServer('terputus');
+  }
+}
+
+/** Periksa berkala setiap 60 detik selama pengguna masih login. */
+function mulaiPantauServer() {
+  periksaSambunganServer();
+  setInterval(function () {
+    if (AppState.session) periksaSambunganServer();
+  }, 60000);
 }

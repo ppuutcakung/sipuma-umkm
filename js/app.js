@@ -21,7 +21,7 @@ function renderShellPeran() {
   const inisial = String(s.username || '?').trim().substring(0, 2).toUpperCase();
   const avatar = document.getElementById('avatarCircle');
   if (s.fotoURL) {
-    avatar.innerHTML = '<img src="' + esc(s.fotoURL) + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
+    avatar.innerHTML = '<img src="' + esc(normalizeFotoUrl(s.fotoURL)) + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
   } else {
     avatar.textContent = inisial;
   }
@@ -119,7 +119,7 @@ async function loadPengaturan() {
     '<div class="grid grid-1-2">' +
       '<div class="panel text-center">' +
         '<div id="previewFotoWrap" style="width:110px;height:110px;margin:0 auto 14px;border-radius:50%;overflow:hidden;background:var(--canvas);display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:700;color:var(--primary);">' +
-          (s.fotoURL ? '<img src="' + esc(s.fotoURL) + '" style="width:100%;height:100%;object-fit:cover;">' : esc(String(s.username || '?').substring(0, 2).toUpperCase())) +
+          (s.fotoURL ? '<img src="' + esc(normalizeFotoUrl(s.fotoURL)) + '" style="width:100%;height:100%;object-fit:cover;">' : esc(String(s.username || '?').substring(0, 2).toUpperCase())) +
         '</div>' +
         '<div style="font-weight:700;">' + esc(s.username) + '</div>' +
         '<div class="text-muted" style="font-size:12px;">' + esc(s.role) + '</div>' +
@@ -129,6 +129,7 @@ async function loadPengaturan() {
           '<div class="login-hint">Format JPG/PNG, ukuran maksimal 2 MB.</div>' +
         '</div>' +
         '<button class="btn btn-outline btn-block" id="btnUploadFoto" onclick="simpanFotoProfil()"><i class="bi bi-upload"></i> Unggah Foto</button>' +
+        (s.fotoURL ? '<button class="btn btn-outline btn-block mt-2" id="btnHapusFoto" onclick="hapusFotoProfilSaya()" style="color:var(--pemula-text);border-color:var(--pemula-text);"><i class="bi bi-trash"></i> Hapus Foto</button>' : '') +
       '</div>' +
       '<div class="panel">' +
         '<div class="panel-title mb-3">Informasi Akun</div>' +
@@ -138,7 +139,163 @@ async function loadPengaturan() {
         '<div class="form-group"><label class="form-label">Alamat</label><textarea class="form-control" id="inputAlamatAkun" placeholder="Alamat lengkap">' + esc(s.alamat || '') + '</textarea></div>' +
         '<button class="btn btn-primary btn-block" id="btnSimpanAkun" onclick="simpanPengaturanAkun()"><i class="bi bi-save"></i> Simpan Perubahan</button>' +
       '</div>' +
-    '</div>';
+    '</div>' +
+    (s.role === 'Admin' ? panelPengaturanAplikasi() : '');
+}
+
+/** Panel identitas aplikasi — hanya Admin yang boleh mengubah. */
+function panelPengaturanAplikasi() {
+  const c = AppState.config || {};
+  return '<div class="panel mt-4">' +
+    '<div class="panel-title">Identitas Aplikasi</div>' +
+    '<div class="panel-sub">Pengaturan ini berlaku untuk semua pengguna SIPUMA. Perubahan langsung terlihat setelah disimpan.</div>' +
+    '<div class="grid grid-2 mt-3">' +
+      '<div class="form-group"><label class="form-label">Nama / Judul Aplikasi</label>' +
+        '<input class="form-control" id="cfgJudul" value="' + esc(c.namaAplikasi || 'SIPUMA') + '" placeholder="Contoh: SIPUMA"></div>' +
+      '<div class="form-group"><label class="form-label">Tagline</label>' +
+        '<input class="form-control" id="cfgTagline" value="' + esc(c.taglineAplikasi || 'by PPU UT Cakung') + '" placeholder="Contoh: by PPU UT Cakung"></div>' +
+    '</div>' +
+    '<div class="form-group"><label class="form-label">Teks Footer</label>' +
+      '<input class="form-control" id="cfgFooter" value="' + esc(c.teksFooter || 'Cakung, Kota Jakarta Timur, DKI Jakarta - Binaan PPU UT Cakung') + '"></div>' +
+    '<div class="grid grid-2">' +
+      '<div class="form-group"><label class="form-label">Warna Utama Aplikasi</label>' +
+        '<div class="d-flex gap-2 align-center">' +
+          '<input type="color" class="form-control" id="cfgWarna" value="' + esc(c.warnaUtama || '#0284C7') + '" style="width:64px;padding:4px;height:38px;" oninput="document.getElementById(\'cfgWarnaTeks\').value = this.value;">' +
+          '<input class="form-control" id="cfgWarnaTeks" value="' + esc(c.warnaUtama || '#0284C7') + '" placeholder="#0284C7" oninput="if(/^#[0-9A-Fa-f]{6}$/.test(this.value)) document.getElementById(\'cfgWarna\').value = this.value;">' +
+        '</div>' +
+        '<div class="login-hint">Ubah warna, lalu Simpan untuk melihat hasilnya.</div></div>' +
+      '<div class="form-group"><label class="form-label">Logo Aplikasi</label>' +
+        '<input type="file" class="form-control" id="cfgLogoFile" accept="image/*">' +
+        '<div class="login-hint">PNG transparan disarankan, maksimal 1 MB.' +
+          (c.logoURL ? ' <a href="' + esc(c.logoURL) + '" target="_blank">Lihat logo saat ini</a>' : '') + '</div></div>' +
+    '</div>' +
+    '<div class="d-flex gap-2">' +
+      '<button class="btn btn-primary" id="btnSimpanAplikasi" onclick="simpanPengaturanAplikasi()"><i class="bi bi-save"></i> Simpan Identitas Aplikasi</button>' +
+      '<button class="btn btn-outline" onclick="resetIdentitasAplikasi()">Kembalikan ke Bawaan</button>' +
+    '</div>' +
+  '</div>';
+}
+
+async function simpanPengaturanAplikasi() {
+  const btn = document.getElementById('btnSimpanAplikasi');
+  const judul   = document.getElementById('cfgJudul').value.trim();
+  const tagline = document.getElementById('cfgTagline').value.trim();
+  const footer  = document.getElementById('cfgFooter').value.trim();
+  const warna   = document.getElementById('cfgWarnaTeks').value.trim() || document.getElementById('cfgWarna').value;
+  const fileLogo = document.getElementById('cfgLogoFile').files[0];
+
+  if (!/^#[0-9A-Fa-f]{6}$/.test(warna)) {
+    showToast('Peringatan', 'Format warna harus seperti #0284C7.', 'warning');
+    return;
+  }
+
+  setBtnLoading(btn);
+  try {
+    // Unggah logo lebih dulu bila ada berkas baru dipilih
+    if (fileLogo) {
+      if (fileLogo.size > 1024 * 1024) {
+        resetBtn(btn);
+        showToast('Peringatan', 'Ukuran logo melebihi 1 MB.', 'warning');
+        return;
+      }
+      const b64 = await bacaFileSebagaiBase64(fileLogo);
+      const up = await panggilAPI('uploadFoto', [b64, 'logo-aplikasi-' + Date.now() + '-' + fileLogo.name, fileLogo.type]);
+      if (up.success && up.data && up.data.fotoURL) {
+        await panggilAPI('setConfig', ['logoURL', up.data.fotoURL]);
+        AppState.config.logoURL = up.data.fotoURL;
+      } else {
+        resetBtn(btn);
+        showToast('Gagal', (up && up.message) || 'Logo gagal diunggah.', 'danger');
+        return;
+      }
+    }
+
+    const hasil = await Promise.all([
+      panggilAPI('setConfig', ['namaAplikasi', judul]),
+      panggilAPI('setConfig', ['taglineAplikasi', tagline]),
+      panggilAPI('setConfig', ['teksFooter', footer]),
+      panggilAPI('setConfig', ['warnaUtama', warna])
+    ]);
+    resetBtn(btn);
+
+    if (hasil.every(function (r) { return r.success; })) {
+      AppState.config.namaAplikasi = judul;
+      AppState.config.taglineAplikasi = tagline;
+      AppState.config.teksFooter = footer;
+      AppState.config.warnaUtama = warna;
+      terapkanIdentitasAplikasi();
+      showToast('Berhasil', 'Identitas aplikasi berhasil diperbarui.', 'success');
+    } else {
+      showToast('Gagal', 'Sebagian pengaturan gagal disimpan. Silakan coba lagi.', 'danger');
+    }
+  } catch (e) {
+    resetBtn(btn);
+    showToast('Gagal', 'Terjadi kesalahan saat menyimpan.', 'danger');
+  }
+}
+
+function resetIdentitasAplikasi() {
+  showConfirm('Kembalikan judul, tagline, footer, dan warna ke pengaturan bawaan?', function () {
+    closeModal('modalConfirm');
+    document.getElementById('cfgJudul').value = 'SIPUMA';
+    document.getElementById('cfgTagline').value = 'by PPU UT Cakung';
+    document.getElementById('cfgFooter').value = 'Cakung, Kota Jakarta Timur, DKI Jakarta - Binaan PPU UT Cakung';
+    document.getElementById('cfgWarna').value = '#0284C7';
+    document.getElementById('cfgWarnaTeks').value = '#0284C7';
+    showToast('Siap', 'Nilai bawaan sudah diisi. Klik Simpan untuk menerapkannya.', 'info');
+  }, 'Ya, Kembalikan');
+}
+
+/**
+ * Terapkan identitas aplikasi (judul, tagline, logo, footer, warna) ke
+ * tampilan. Dipanggil setiap kali masuk aplikasi dan setelah disimpan.
+ */
+function terapkanIdentitasAplikasi() {
+  const c = AppState.config || {};
+
+  if (c.namaAplikasi) {
+    document.title = c.namaAplikasi + ' — PPU UT Cakung';
+    document.querySelectorAll('.brand-name').forEach(function (el) { el.textContent = c.namaAplikasi; });
+  }
+  if (c.taglineAplikasi) {
+    document.querySelectorAll('.brand-sub').forEach(function (el) { el.textContent = c.taglineAplikasi; });
+  }
+  if (c.teksFooter) {
+    const f = document.querySelector('.app-footer span');
+    if (f) f.innerHTML = '<i class="bi bi-geo-alt"></i> ' + esc(c.teksFooter);
+  }
+  if (c.logoURL) {
+    document.querySelectorAll('.logo-badge').forEach(function (el) {
+      el.innerHTML = '<img src="' + esc(normalizeFotoUrl(c.logoURL)) + '" alt="Logo" style="width:100%;height:100%;object-fit:contain;border-radius:8px;">';
+    });
+  }
+  if (c.warnaUtama && /^#[0-9A-Fa-f]{6}$/.test(c.warnaUtama)) {
+    const akar = document.documentElement;
+    akar.style.setProperty('--primary', c.warnaUtama);
+    akar.style.setProperty('--primary-active', gelapkanWarna(c.warnaUtama, 18));
+    akar.style.setProperty('--primary-light', terangkanWarna(c.warnaUtama, 90));
+    akar.style.setProperty('--sidebar-active-bg', c.warnaUtama);
+  }
+}
+
+/** Gelapkan warna heksadesimal beberapa persen (untuk status aktif/tekan). */
+function gelapkanWarna(hex, persen) {
+  const n = parseInt(hex.slice(1), 16);
+  const f = (100 - persen) / 100;
+  const r = Math.round(((n >> 16) & 255) * f);
+  const g = Math.round(((n >> 8) & 255) * f);
+  const b = Math.round((n & 255) * f);
+  return '#' + [r, g, b].map(function (v) { return ('0' + v.toString(16)).slice(-2); }).join('');
+}
+
+/** Terangkan warna heksadesimal (untuk latar lembut). */
+function terangkanWarna(hex, persen) {
+  const n = parseInt(hex.slice(1), 16);
+  const f = persen / 100;
+  const r = Math.round(((n >> 16) & 255) + (255 - ((n >> 16) & 255)) * f);
+  const g = Math.round(((n >> 8) & 255) + (255 - ((n >> 8) & 255)) * f);
+  const b = Math.round((n & 255) + (255 - (n & 255)) * f);
+  return '#' + [r, g, b].map(function (v) { return ('0' + v.toString(16)).slice(-2); }).join('');
 }
 
 async function simpanPengaturanAkun() {
@@ -167,7 +324,9 @@ async function simpanFotoProfil() {
   setBtnLoading(btn, 'Mengunggah...');
   try {
     const base64 = await bacaFileSebagaiBase64(file);
-    const res = await panggilAPI('uploadFoto', [base64, file.name, file.type]);
+    // Argumen ke-4 = foto lama, agar berkasnya dihapus dari Drive dan
+    // tidak menumpuk setiap kali pengguna mengganti foto.
+    const res = await panggilAPI('uploadFoto', [base64, file.name, file.type, AppState.session.fotoURL || '']);
     resetBtn(btn);
     if (res.success && res.data && res.data.fotoURL) {
       const urlFoto = res.data.fotoURL;
@@ -175,7 +334,7 @@ async function simpanFotoProfil() {
       AppState.session.fotoURL = urlFoto;
       simpanSesiLokal(AppState.session);
       AppState.cache.users = null;
-      document.getElementById('previewFotoWrap').innerHTML = '<img src="' + esc(urlFoto) + '" style="width:100%;height:100%;object-fit:cover;">';
+      document.getElementById('previewFotoWrap').innerHTML = '<img src="' + esc(normalizeFotoUrl(urlFoto)) + '" style="width:100%;height:100%;object-fit:cover;">';
       renderShellPeran();
       showToast('Berhasil', 'Foto profil berhasil diperbarui.', 'success');
     } else {
@@ -248,3 +407,28 @@ if (document.readyState === 'interactive' || document.readyState === 'complete')
   document.addEventListener('DOMContentLoaded', inisialisasiSipuma);
 }
 setTimeout(inisialisasiSipuma, 1500);
+
+/** Hapus foto profil pengguna yang sedang login (berkas Drive ikut dihapus). */
+function hapusFotoProfilSaya() {
+  showConfirm('Hapus foto profil Anda? Berkas fotonya juga akan dihapus dari Google Drive.', function () {
+    closeModal('modalConfirm');
+    const btn = document.getElementById('btnHapusFoto');
+    setBtnLoading(btn, 'Menghapus...');
+    panggilServerAman('hapusFotoProfil', [], function (res) {
+      resetBtn(btn);
+      if (res.success) {
+        AppState.session.fotoURL = '';
+        simpanSesiLokal(AppState.session);
+        AppState.cache.users = null;
+        renderShellPeran();
+        loadPengaturan();           // segarkan halaman agar tombol menyesuaikan
+        showToast('Berhasil', res.message, 'success');
+      } else {
+        showToast('Gagal', res.message, 'danger');
+      }
+    }, function () {
+      resetBtn(btn);
+      showToast('Error', 'Gagal menghapus foto. Silakan coba lagi.', 'danger');
+    });
+  }, 'Ya, Hapus');
+}

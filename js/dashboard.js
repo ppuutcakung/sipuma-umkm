@@ -28,6 +28,19 @@ async function loadDashboard() {
   renderDashboardOrganisasi(res.data, role);
 }
 
+/** Muat ulang dashboard untuk tahun tertentu (dipicu filter tahun). */
+async function gantiTahunDashboard(tahun) {
+  const role = AppState.session.role;
+  const wadah = document.getElementById('app-container');
+  wadah.innerHTML = areaMemuat();
+  const sec = AppState.currentSection;
+  const res = await panggilAPI('getDashboardOrganisasi', [Number(tahun)]);
+  if (AppState.currentSection !== sec) return;
+  if (!res.success) { wadah.innerHTML = areaGagal('Gagal memuat dashboard.', 'loadDashboard()'); return; }
+  AppState.cache.dashboardOrganisasi = res.data;
+  renderDashboardOrganisasi(res.data, role);
+}
+
 function renderDashboardOrganisasi(d, role) {
   const isAdmin = role === 'Admin';
   const wadah = document.getElementById('app-container');
@@ -37,9 +50,20 @@ function renderDashboardOrganisasi(d, role) {
   const rataPendapatan = d.totalUMKM ? (d.totalOmset / d.totalUMKM / 12) : 0;
   const rataTenagaKerja = d.totalUMKM ? Math.round(d.totalTenagaKerja / d.totalUMKM) : 0;
 
+  const daftarTahun = (d.daftarTahun && d.daftarTahun.length) ? d.daftarTahun : [d.tahun];
+  const filterTahun =
+    '<div class="d-flex gap-2 align-center">' +
+      '<label class="form-label mb-0" style="white-space:nowrap;">Tahun Data</label>' +
+      '<select class="form-select" style="width:auto;height:34px;" onchange="gantiTahunDashboard(this.value)">' +
+        daftarTahun.map(function (t) {
+          return '<option value="' + t + '"' + (Number(t) === Number(d.tahun) ? ' selected' : '') + '>' + t + '</option>';
+        }).join('') +
+      '</select></div>';
+
   wadah.innerHTML =
-    pageHeader('Ringkasan Program', isAdmin ? 'Dashboard' : 'Dashboard', 'Utama',
-      'Ikhtisar perkembangan seluruh UMKM binaan PPU UT Cakung tahun ' + d.tahun + '.', '') +
+    pageHeader('Ringkasan Program', 'Dashboard', 'Utama',
+      'Ikhtisar perkembangan seluruh UMKM binaan PPU UT Cakung — data kumulatif (YTD) tahun ' + d.tahun + '.',
+      filterTahun) +
 
     '<div class="grid grid-4 mb-4">' +
       '<div class="kpi-card c-red">' +
@@ -64,27 +88,38 @@ function renderDashboardOrganisasi(d, role) {
       '</div>' +
     '</div>' +
 
-    '<div class="grid grid-2-1 mb-4">' +
+    // Dua grafik bersebelahan: Omset dan Tenaga Kerja
+    '<div class="grid grid-2 mb-4">' +
       '<div class="panel">' +
         '<div class="panel-title">Tren Omset Bulanan ' + d.tahun + '</div>' +
         '<div class="panel-sub">Akumulasi omset UMKM binaan per bulan</div>' +
         '<div style="height:260px;margin-top:12px;"><canvas id="chartOmset"></canvas></div>' +
       '</div>' +
       '<div class="panel">' +
-        '<div class="panel-title">Distribusi Kelas Kemandirian</div>' +
-        '<div class="panel-sub">' + d.totalUMKMDenganKelas + ' UMKM telah diasesmen</div>' +
-        '<div class="mt-3">' +
-          TIER_LIST.map(function (t) {
-            const jml = d.distribusiKelas[t] || 0;
-            const persen = d.totalUMKMDenganKelas ? Math.round(jml / d.totalUMKMDenganKelas * 100) : 0;
-            return '<div class="mb-3">' +
-              '<div class="d-flex flex-between" style="font-size:12.5px;margin-bottom:4px;">' +
-                '<span class="tier-name"><span class="dot dot-' + tierClass(t) + '"></span>' + t + '</span>' +
-                '<b>' + jml + ' UMKM</b></div>' +
-              '<div class="progress-track"><div class="progress-fill tier-' + tierClass(t) + '" style="width:' + persen + '%;"></div></div>' +
-            '</div>';
-          }).join('') +
-        '</div>' +
+        '<div class="panel-title">Perkembangan Tenaga Kerja ' + d.tahun + '</div>' +
+        '<div class="panel-sub">Jumlah tenaga kerja terserap per bulan</div>' +
+        '<div style="height:260px;margin-top:12px;"><canvas id="chartTenagaKerja"></canvas></div>' +
+      '</div>' +
+    '</div>' +
+
+    // Distribusi kelas kemandirian — melebar penuh di bawah kedua grafik
+    '<div class="panel mb-4">' +
+      '<div class="flex-between" style="flex-wrap:wrap;gap:8px;">' +
+        '<div><div class="panel-title mb-0">Distribusi Kelas Kemandirian</div>' +
+        '<div class="panel-sub mb-0">' + d.totalUMKMDenganKelas + ' UMKM telah diasesmen — bersumber dari tab Asesmen Kemandirian</div></div>' +
+      '</div>' +
+      '<div class="grid grid-4 mt-3">' +
+        TIER_LIST.map(function (t) {
+          const jml = d.distribusiKelas[t] || 0;
+          const persen = d.totalUMKMDenganKelas ? Math.round(jml / d.totalUMKMDenganKelas * 100) : 0;
+          return '<div style="padding:12px;background:var(--canvas);border-radius:10px;">' +
+            '<div class="d-flex flex-between" style="font-size:12.5px;margin-bottom:6px;">' +
+              '<span class="tier-name"><span class="dot dot-' + tierClass(t) + '"></span>' + esc(t) + '</span>' +
+              '<b>' + jml + '</b></div>' +
+            '<div class="progress-track"><div class="progress-fill tier-' + tierClass(t) + '" style="width:' + persen + '%;"></div></div>' +
+            '<div class="text-muted mt-2" style="font-size:11px;">' + persen + '% dari total</div>' +
+          '</div>';
+        }).join('') +
       '</div>' +
     '</div>' +
 
@@ -122,6 +157,39 @@ function renderDashboardOrganisasi(d, role) {
     '</div>';
 
   gambarChartOmset(d);
+  gambarChartTenagaKerja(d);
+}
+
+/** Grafik batang perkembangan tenaga kerja per bulan. */
+function gambarChartTenagaKerja(d) {
+  const kanvas = document.getElementById('chartTenagaKerja');
+  if (!kanvas || typeof Chart === 'undefined') return;
+  try {
+    new Chart(kanvas, {
+      type: 'bar',
+      data: {
+        labels: d.bulanLabel || BULAN_LIST,
+        datasets: [{
+          label: 'Tenaga Kerja',
+          data: d.tenagaKerjaPerBulan || [],
+          backgroundColor: 'rgba(124,58,237,0.75)',
+          borderRadius: 4,
+          maxBarThickness: 28
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: function (c) { return c.parsed.y + ' orang'; } } }
+        },
+        scales: {
+          y: { beginAtZero: true, ticks: { precision: 0, font: { size: 10 } } },
+          x: { ticks: { font: { size: 10 } } }
+        }
+      }
+    });
+  } catch (e) { console.warn('Grafik tenaga kerja gagal digambar:', e); }
 }
 
 function gambarChartOmset(d) {
