@@ -164,6 +164,10 @@ function renderLegalitasTabel(halaman) {
 function formLegalitas(data) {
   const isEdit = !!data;
   const seumurHidup = isEdit && (data.IsSeumurHidup || String(data.SeumurHidup).toLowerCase() === 'ya');
+  // Bila jenis yang tersimpan TIDAK ada di daftar baku, berarti dulu
+  // diketik manual lewat pilihan "Lainnya" — tampilkan kembali begitu.
+  const jenisManual = isEdit && JENIS_LEGALITAS.indexOf(data.JenisLegalitas) === -1;
+  const jenisTerpilih = jenisManual ? 'Lainnya' : (isEdit ? data.JenisLegalitas : null);
 
   const body =
     '<input type="hidden" id="legalId" value="' + (isEdit ? esc(data.ID) : '') + '">' +
@@ -171,7 +175,10 @@ function formLegalitas(data) {
       dropdownUmkmCari('legalUmkm', isEdit ? data.IDUMKM : null, '', isEdit) + '</div>' +
     '<div class="grid grid-2">' +
       '<div class="form-group"><label class="form-label">Jenis Legalitas</label>' +
-        '<select class="form-select" id="legalJenis">' + optionsHtml(JENIS_LEGALITAS, isEdit ? data.JenisLegalitas : null) + '</select></div>' +
+        '<select class="form-select" id="legalJenis" onchange="toggleJenisLegalitasLain()">' +
+          optionsHtml(JENIS_LEGALITAS, jenisTerpilih) + '</select>' +
+        '<input class="form-control mt-2" id="legalJenisLain" placeholder="Tulis jenis legalitas..." value="' +
+          (jenisManual ? esc(data.JenisLegalitas) : '') + '" style="display:' + (jenisManual ? 'block' : 'none') + ';"></div>' +
       '<div class="form-group"><label class="form-label">Nomor Legalitas</label>' +
         '<input class="form-control" id="legalNomor" value="' + (isEdit ? esc(data.NomorLegalitas || '') : '') + '" placeholder="Contoh: 1234567890123"></div>' +
     '</div>' +
@@ -211,6 +218,10 @@ function simpanLegalitas(isEdit) {
   const kadaluarsa = document.getElementById('legalKadaluarsa').value;
 
   if (!kodeUmkm) { showToast('Peringatan', 'Pilih UMKM terlebih dahulu.', 'warning'); return; }
+  if (!ambilJenisLegalitas()) {
+    showToast('Peringatan', 'Tuliskan jenis legalitasnya pada kolom yang tersedia.', 'warning');
+    return;
+  }
   if (!seumurHidup && !kadaluarsa) {
     showToast('Peringatan', 'Isi tanggal kadaluarsa, atau centang "Berlaku seumur hidup".', 'warning');
     return;
@@ -220,7 +231,7 @@ function simpanLegalitas(isEdit) {
   const record = {
     IDUMKM: kodeUmkm,
     NamaUMKM: umkmObj ? umkmObj.NamaUMKM : '',
-    JenisLegalitas: document.getElementById('legalJenis').value,
+    JenisLegalitas: ambilJenisLegalitas(),
     NomorLegalitas: document.getElementById('legalNomor').value.trim(),
     TanggalTerbit: document.getElementById('legalTerbit').value,
     TanggalKadaluarsa: seumurHidup ? '' : kadaluarsa,
@@ -329,4 +340,24 @@ function renderLegalitasSaya(rows) {
       : '<tr><td colspan="5"><div class="table-empty"><i class="bi bi-inbox"></i>' +
         'Belum ada data legalitas yang tercatat. Hubungi pendamping PPU UT Cakung untuk mendaftarkannya.</div></td></tr>') +
       '</tbody></table></div></div>';
+}
+
+
+/** Tampilkan/sembunyikan kolom ketik manual saat jenis "Lainnya" dipilih. */
+function toggleJenisLegalitasLain() {
+  const pilih = document.getElementById('legalJenis');
+  const kolom = document.getElementById('legalJenisLain');
+  if (!pilih || !kolom) return;
+  const lainnya = pilih.value === 'Lainnya';
+  kolom.style.display = lainnya ? 'block' : 'none';
+  if (lainnya) kolom.focus(); else kolom.value = '';
+}
+
+/** Ambil jenis legalitas final: dari daftar baku, atau ketikan manual. */
+function ambilJenisLegalitas() {
+  const pilih = document.getElementById('legalJenis');
+  if (!pilih) return '';
+  if (pilih.value !== 'Lainnya') return pilih.value;
+  const kolom = document.getElementById('legalJenisLain');
+  return kolom ? kolom.value.trim() : '';
 }

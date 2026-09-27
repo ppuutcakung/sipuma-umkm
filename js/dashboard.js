@@ -304,7 +304,7 @@ function widgetKemandirianRingkas(d, cls) {
     '</div>';
   }
   const k = d.kelas;
-  return '<div class="panel tier-panel tier-' + cls + ' tier-panel-ringkas">' +
+  return '<div class="panel tier-panel tier-' + cls + ' tier-panel-ringkas" style="display:flex;flex-direction:column;">' +
     '<div class="d-flex flex-between align-center">' +
       '<span style="font-size:11px;text-transform:uppercase;font-weight:700;opacity:.8;">Status Kemandirian</span>' +
       '<span class="lvl-badge">Skor ' + k.RataRata + '</span>' +
@@ -315,20 +315,32 @@ function widgetKemandirianRingkas(d, cls) {
       '<div class="pilar-baris"><span class="pilar-label">Pemasaran</span><span class="pilar-nilai">' + k.SkorPemasaran + '</span></div>' +
       '<div class="pilar-baris"><span class="pilar-label">Keuangan</span><span class="pilar-nilai">' + k.SkorKeuangan + '</span></div>' +
     '</div>' +
-    '<div style="font-size:10.5px;opacity:.75;margin-top:10px;"><i class="bi bi-calendar3"></i> Dinilai ' + formatBulanTahun(k.TanggalAsesmen) + '</div>' +
+    '<div style="font-size:10.5px;opacity:.75;margin-top:auto;padding-top:10px;"><i class="bi bi-calendar3"></i> Dinilai ' + formatBulanTahun(k.TanggalAsesmen) + '</div>' +
   '</div>';
 }
 
 /** Widget realisasi omset — ringkas dan proporsional. */
 function widgetRealisasiOmset(d, persen) {
-  return '<div class="panel tier-panel-ringkas">' +
+  // Tata letak memakai flex-column agar baris terakhir (target + status)
+  // menempel di DASAR kartu — sejajar dengan baris "Dinilai" pada widget
+  // Status Kemandirian di sebelahnya, walau isi tengahnya berbeda tinggi.
+  return '<div class="panel tier-panel-ringkas" style="display:flex;flex-direction:column;">' +
     '<span class="text-muted" style="font-size:11px;text-transform:uppercase;font-weight:700;">Realisasi Omset ' + d.tahun + '</span>' +
-    '<div style="font-size:20px;font-weight:700;margin-top:4px;line-height:1.2;">' + formatRupiahFull(d.totalRealisasi) + '</div>' +
-    '<div class="text-muted" style="font-size:11.5px;margin-top:2px;">dari target ' + formatRupiahFull(d.target) + '</div>' +
-    '<div class="progress-track mt-2"><div class="progress-fill" style="width:' + persen + '%;background:var(--primary);"></div></div>' +
-    '<div class="d-flex flex-between align-center mt-2">' +
-      '<span class="status-pill ' + (d.statusTarget === 'Tercapai' ? 'allowed' : 'blocked') + '"><span class="dot"></span>' + esc(d.statusTarget) + '</span>' +
-      '<b style="font-size:13px;">' + persen + '%</b>' +
+
+    '<div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:6px 0;">' +
+      '<div style="font-size:26px;font-weight:800;line-height:1.15;letter-spacing:-0.5px;">' +
+        formatRupiahFull(d.totalRealisasi) + '</div>' +
+      '<div class="d-flex flex-between align-center" style="margin-top:10px;">' +
+        '<div class="progress-track" style="flex:1;margin-right:10px;">' +
+          '<div class="progress-fill" style="width:' + persen + '%;background:var(--primary);"></div></div>' +
+        '<b style="font-size:13px;white-space:nowrap;">' + persen + '%</b>' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="d-flex flex-between align-center" style="gap:8px;flex-wrap:wrap;">' +
+      '<span class="text-muted" style="font-size:10.5px;">dari target ' + formatRupiahFull(d.target) + '</span>' +
+      '<span class="status-pill ' + (d.statusTarget === 'Tercapai' ? 'allowed' : 'blocked') + '" style="font-size:10.5px;">' +
+        '<span class="dot"></span>' + esc(d.statusTarget) + '</span>' +
     '</div>' +
   '</div>';
 }

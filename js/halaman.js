@@ -329,7 +329,12 @@ function muatRiwayatTahunanOmset(kodeUmkm) {
   const area = document.getElementById('riwayatOmsetArea');
   if (!area) return;
   if (AppState.cache.omsetAll) { renderRiwayatTahunanOmset(kodeUmkm); return; }
-  panggilServerAman('getAllOmset', [], (res) => {
+  // Pengguna UMKM memakai action khusus yang HANYA mengembalikan data
+  // usahanya sendiri. getAllOmset sengaja tidak dibuka untuk peran UMKM,
+  // karena isinya omset SELURUH UMKM binaan.
+  const aksi = AppState.session.role === 'UMKM' ? 'getRiwayatOmsetUMKM' : 'getAllOmset';
+  const argumen = AppState.session.role === 'UMKM' ? [AppState.session.idUmkm] : [];
+  panggilServerAman(aksi, argumen, (res) => {
     if (AppState.currentSection !== sec) return;
     AppState.cache.omsetAll = res.success ? parseJsonAman(res.data, []) : [];
     renderRiwayatTahunanOmset(kodeUmkm);
