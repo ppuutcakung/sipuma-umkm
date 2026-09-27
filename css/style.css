@@ -491,3 +491,33 @@ textarea.form-control { height: auto; padding: 10px 12px; min-height: 84px; resi
 }
 .sidebar-scrim { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.4); z-index: 999; }
 .sidebar-scrim.show { display: block; }
+
+/* ── Widget Status Kemandirian (dashboard UMKM) ── */
+.tier-panel-ringkas { padding: 16px 18px; }
+.tier-panel-ringkas .tier-nama { font-size: 20px; font-weight: 700; margin-top: 4px; line-height: 1.2; }
+.pilar-list { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.pilar-baris { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; padding: 5px 10px; background: rgba(255,255,255,0.45); border-radius: 7px; }
+.pilar-baris .pilar-label { font-weight: 500; }
+.pilar-baris .pilar-nilai { font-weight: 700; }
+
+/* ── Widget Status Legalitas ── */
+.legal-ringkas { display: flex; gap: 8px; margin-top: 10px; }
+.legal-kotak { flex: 1; text-align: center; padding: 10px 6px; border-radius: 9px; background: var(--canvas); }
+.legal-kotak .angka { font-size: 22px; font-weight: 700; line-height: 1; }
+.legal-kotak .label { font-size: 10.5px; margin-top: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: .2px; }
+.legal-aktif   .angka, .legal-aktif   .label { color: var(--pramandiri-text); }
+.legal-perbarui .angka, .legal-perbarui .label { color: var(--madya-text); }
+.legal-lewat   .angka, .legal-lewat   .label { color: var(--pemula-text); }
+.legal-aktif    { background: var(--pramandiri-bg); }
+.legal-perbarui { background: var(--madya-bg); }
+.legal-lewat    { background: var(--pemula-bg); }
+
+.legal-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--border-color); }
+.legal-item:last-child { border-bottom: none; }
+.legal-item .legal-nama { font-size: 12.5px; font-weight: 600; }
+.legal-item .legal-sub { font-size: 11px; color: var(--text-muted); }
+
+/* ── Catatan hasil asesmen ── */
+.catatan-asesmen { padding: 11px 13px; background: var(--canvas); border-radius: 9px; border-left: 3px solid var(--primary); margin-bottom: 9px; }
+.catatan-asesmen .ca-judul { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: var(--primary); margin-bottom: 3px; }
+.catatan-asesmen .ca-isi { font-size: 12.5px; line-height: 1.5; }

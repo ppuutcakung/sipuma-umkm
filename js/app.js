@@ -65,6 +65,7 @@ function navigateTo(sectionId) {
       case 'kemandirian':        cekTersedia(window.loadKemandirian, 'Asesmen Kemandirian'); break;
       case 'fasilitasi':         cekTersedia(window.loadFasilitasi, 'Fasilitasi Pemasaran'); break;
       case 'prestasi':           cekTersedia(window.loadPrestasiAdmin, 'Catatan Prestasi UMKM'); break;
+      case 'legalitas':          cekTersedia(window.loadLegalitasAdmin, 'Legalitas UMKM'); break;
       // Laporan CSR: Admin bisa unggah/hapus, CSR UT hanya melihat
       case 'fileLaporan':
         cekTersedia(
@@ -84,6 +85,7 @@ function navigateTo(sectionId) {
       case 'updateOmset':        cekTersedia(window.loadOmsetUmkm, 'Update Omset'); break;
       case 'updateTenagaKerja':  cekTersedia(window.loadTenagaKerjaUmkm, 'Update Tenaga Kerja'); break;
       case 'fasilitasiSaya':     cekTersedia(window.loadFasilitasiSaya, 'Fasilitasi Pemasaran'); break;
+      case 'legalitasSaya':      cekTersedia(window.loadLegalitasSaya, 'Legalitas Usaha Saya'); break;
       case 'profilSaya':         cekTersedia(window.loadProfilSaya, 'Profil Usaha Saya'); break;
       case 'bantuan':            cekTersedia(window.loadBantuan, 'Bantuan & Support'); break;
 

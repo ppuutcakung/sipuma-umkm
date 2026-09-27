@@ -48,7 +48,8 @@ const AppState = {
     fasilitasi: null,
     prestasi: null,
     laporanCsr: null,
-    dashboardOrganisasi: null
+    dashboardOrganisasi: null,
+    legalitas: null
   }
 };
 
@@ -57,7 +58,7 @@ function resetCache() {
   AppState.cache = {
     umkm: null, users: null, omsetAll: null, tenagaKerjaAll: null,
     kemandirianAll: null, kemandirianPerUmkm: {}, tenagaKerjaPerUmkmTahun: {},
-    fasilitasi: null, prestasi: null, laporanCsr: null, dashboardOrganisasi: null
+    fasilitasi: null, prestasi: null, laporanCsr: null, dashboardOrganisasi: null, legalitas: null
   };
 }
 
@@ -70,7 +71,8 @@ const MENU_PER_ROLE = {
     { id: 'tenagaKerja',        label: 'Input Tenaga Kerja',     icon: 'bi-people-fill' },
     { id: 'kemandirian',        label: 'Asesmen Kemandirian',    icon: 'bi-award-fill' },
     { id: 'fasilitasi',         label: 'Fasilitasi Pemasaran',   icon: 'bi-megaphone-fill' },
-    { id: 'prestasi',           label: 'Catatan Prestasi UMKM',  icon: 'bi-star-fill', badge: 'Baru' },
+    { id: 'legalitas',          label: 'Legalitas UMKM',         icon: 'bi-patch-check-fill', badge: 'Baru' },
+    { id: 'prestasi',           label: 'Catatan Prestasi UMKM',  icon: 'bi-star-fill' },
     { id: 'fileLaporan',        label: 'Laporan CSR (PDF)',      icon: 'bi-file-earmark-pdf-fill' },
     { id: 'userAkses',          label: 'Manajemen User & Akses', icon: 'bi-shield-lock-fill' }
   ],
@@ -87,6 +89,7 @@ const MENU_PER_ROLE = {
     { id: 'updateOmset',        label: 'Update Omset',           icon: 'bi-graph-up-arrow', badge: 'Baru' },
     { id: 'updateTenagaKerja',  label: 'Update Tenaga Kerja',    icon: 'bi-people-fill' },
     { id: 'fasilitasiSaya',     label: 'Fasilitasi Pemasaran',   icon: 'bi-megaphone-fill' },
+    { id: 'legalitasSaya',      label: 'Legalitas Usaha Saya',   icon: 'bi-patch-check-fill', badge: 'Baru' },
     { id: 'profilSaya',         label: 'Profil Usaha Saya',      icon: 'bi-shop' },
     { id: 'bantuan',            label: 'Bantuan & Support',      icon: 'bi-question-circle-fill' }
   ]

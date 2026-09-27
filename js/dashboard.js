@@ -222,47 +222,48 @@ function gambarChartOmset(d) {
 }
 
 // ── Dashboard khusus UMKM ──
+
 function renderDashboardUMKM(d) {
   const wadah = document.getElementById('app-container');
   if (!d) { wadah.innerHTML = areaGagal('Data dashboard kosong.', 'loadDashboard()'); return; }
 
   const persenTarget = d.target ? Math.min(100, Math.round(d.totalRealisasi / d.target * 100)) : 0;
   const cls = d.kelas ? tierClass(d.kelas.Kelas) : 'madya';
+  const legal = d.legalitas || [];
 
   wadah.innerHTML =
     pageHeader('Ringkasan Usaha Saya', 'Dashboard', 'Bisnis UMKM Saya',
-      'Pantau realisasi omset bulanan terhadap target tahunan, data penyerapan tenaga kerja, dan evaluasi kelas kemandirian bisnis Anda.', '') +
+      'Pantau realisasi omset, penyerapan tenaga kerja, status legalitas, dan kelas kemandirian usaha Anda.', '') +
 
-    '<div class="grid grid-2 mb-4">' +
-      '<div class="panel tier-panel tier-' + cls + '">' +
-        '<span style="font-size:11px;text-transform:uppercase;font-weight:700;opacity:.8;">Status Kemandirian Usaha</span>' +
-        '<div style="font-size:22px;font-weight:700;margin-top:6px;">' + (d.kelas ? esc(d.kelas.Kelas) : 'Belum Dinilai') +
-          (d.kelas ? ' <span class="lvl-badge">Skor ' + d.kelas.RataRata + '</span>' : '') + '</div>' +
-        (d.kelas ? '<div class="pilar-row"><span>Produksi ' + d.kelas.SkorProduksi + '</span><span>Pemasaran ' + d.kelas.SkorPemasaran + '</span><span>Keuangan ' + d.kelas.SkorKeuangan + '</span></div>' : '') +
-        (d.kelas ? '<div class="text-muted" style="font-size:11px;margin-top:6px;"><i class="bi bi-calendar3"></i> Dinilai: ' + formatBulanTahun(d.kelas.TanggalAsesmen) + '</div>' : '') +
-      '</div>' +
-      '<div class="panel">' +
-        '<span class="text-muted" style="font-size:11px;text-transform:uppercase;font-weight:700;">Realisasi Omset ' + d.tahun + '</span>' +
-        '<div style="font-size:24px;font-weight:700;margin-top:6px;">' + formatRupiahFull(d.totalRealisasi) + '</div>' +
-        '<div class="text-muted" style="font-size:12px;">Target: ' + formatRupiahFull(d.target) + ' &middot; <b>' + persenTarget + '%</b></div>' +
-        '<div class="progress-track mt-2"><div class="progress-fill" style="width:' + persenTarget + '%;background:var(--primary);"></div></div>' +
-        '<div class="mt-2"><span class="status-pill ' + (d.statusTarget === 'Tercapai' ? 'allowed' : 'blocked') + '"><span class="dot"></span>' + esc(d.statusTarget) + '</span></div>' +
-      '</div>' +
+    // ── Baris 1: tiga widget ringkas & sejajar ──
+    '<div class="grid grid-3 mb-4">' +
+      widgetKemandirianRingkas(d, cls) +
+      widgetRealisasiOmset(d, persenTarget) +
+      widgetStatusLegalitas(legal) +
     '</div>' +
 
-    '<div class="grid grid-2-1 mb-4">' +
+    // ── Baris 2: dua grafik bersebelahan ──
+    '<div class="grid grid-2 mb-4">' +
       '<div class="panel">' +
         '<div class="panel-title">Tren Omset Bulanan ' + d.tahun + '</div>' +
-        '<div style="height:240px;margin-top:12px;"><canvas id="chartOmset"></canvas></div>' +
+        '<div class="panel-sub">Realisasi omset usaha Anda per bulan</div>' +
+        '<div style="height:250px;margin-top:12px;"><canvas id="chartOmset"></canvas></div>' +
       '</div>' +
       '<div class="panel">' +
-        '<div class="panel-title">Tenaga Kerja</div>' +
-        '<div style="font-size:30px;font-weight:700;">' + d.tenagaKerjaTerbaru + ' <span style="font-size:14px;font-weight:500;" class="text-muted">orang</span></div>' +
-        '<div class="text-muted" style="font-size:12px;">Data bulan terakhir yang Anda input</div>' +
-        '<a class="btn btn-outline btn-block mt-3" onclick="navigateTo(\'updateTenagaKerja\')"><i class="bi bi-pencil"></i> Perbarui Data</a>' +
+        '<div class="panel-title">Perkembangan Tenaga Kerja ' + d.tahun + '</div>' +
+        '<div class="panel-sub">Jumlah tenaga kerja usaha Anda per bulan</div>' +
+        '<div style="height:250px;margin-top:12px;"><canvas id="chartTenagaKerja"></canvas></div>' +
+        '<div class="d-flex flex-between mt-2" style="font-size:12px;">' +
+          '<span class="text-muted">Data bulan terakhir</span>' +
+          '<b>' + d.tenagaKerjaTerbaru + ' orang</b>' +
+        '</div>' +
       '</div>' +
     '</div>' +
 
+    // ── Baris 3: catatan hasil asesmen ──
+    blokCatatanAsesmen(d.kelas) +
+
+    // ── Baris 4: prestasi & fasilitasi ──
     '<div class="grid grid-2">' +
       '<div class="panel">' +
         '<div class="panel-title">Prestasi Usaha Saya</div>' +
@@ -290,4 +291,119 @@ function renderDashboardUMKM(d) {
     '</div>';
 
   gambarChartOmset({ bulanLabel: d.bulanLabel, omsetPerBulan: d.omsetBulanan });
+  gambarChartTenagaKerja({ bulanLabel: d.bulanLabel, tenagaKerjaPerBulan: d.tkPerBulan || [] });
+}
+
+/** Widget status kemandirian — ringkas, tiap pilar satu baris. */
+function widgetKemandirianRingkas(d, cls) {
+  if (!d.kelas) {
+    return '<div class="panel tier-panel tier-' + cls + ' tier-panel-ringkas">' +
+      '<span style="font-size:11px;text-transform:uppercase;font-weight:700;opacity:.8;">Status Kemandirian Usaha</span>' +
+      '<div class="tier-nama">Belum Dinilai</div>' +
+      '<div class="text-muted mt-2" style="font-size:11.5px;">Asesmen akan dilakukan oleh pendamping PPU UT Cakung.</div>' +
+    '</div>';
+  }
+  const k = d.kelas;
+  return '<div class="panel tier-panel tier-' + cls + ' tier-panel-ringkas">' +
+    '<div class="d-flex flex-between align-center">' +
+      '<span style="font-size:11px;text-transform:uppercase;font-weight:700;opacity:.8;">Status Kemandirian</span>' +
+      '<span class="lvl-badge">Skor ' + k.RataRata + '</span>' +
+    '</div>' +
+    '<div class="tier-nama">' + esc(k.Kelas) + '</div>' +
+    '<div class="pilar-list">' +
+      '<div class="pilar-baris"><span class="pilar-label">Produksi</span><span class="pilar-nilai">' + k.SkorProduksi + '</span></div>' +
+      '<div class="pilar-baris"><span class="pilar-label">Pemasaran</span><span class="pilar-nilai">' + k.SkorPemasaran + '</span></div>' +
+      '<div class="pilar-baris"><span class="pilar-label">Keuangan</span><span class="pilar-nilai">' + k.SkorKeuangan + '</span></div>' +
+    '</div>' +
+    '<div style="font-size:10.5px;opacity:.75;margin-top:10px;"><i class="bi bi-calendar3"></i> Dinilai ' + formatBulanTahun(k.TanggalAsesmen) + '</div>' +
+  '</div>';
+}
+
+/** Widget realisasi omset — ringkas dan proporsional. */
+function widgetRealisasiOmset(d, persen) {
+  return '<div class="panel tier-panel-ringkas">' +
+    '<span class="text-muted" style="font-size:11px;text-transform:uppercase;font-weight:700;">Realisasi Omset ' + d.tahun + '</span>' +
+    '<div style="font-size:20px;font-weight:700;margin-top:4px;line-height:1.2;">' + formatRupiahFull(d.totalRealisasi) + '</div>' +
+    '<div class="text-muted" style="font-size:11.5px;margin-top:2px;">dari target ' + formatRupiahFull(d.target) + '</div>' +
+    '<div class="progress-track mt-2"><div class="progress-fill" style="width:' + persen + '%;background:var(--primary);"></div></div>' +
+    '<div class="d-flex flex-between align-center mt-2">' +
+      '<span class="status-pill ' + (d.statusTarget === 'Tercapai' ? 'allowed' : 'blocked') + '"><span class="dot"></span>' + esc(d.statusTarget) + '</span>' +
+      '<b style="font-size:13px;">' + persen + '%</b>' +
+    '</div>' +
+  '</div>';
+}
+
+/** Widget status legalitas — ringkasan jumlah + daftar yang perlu perhatian. */
+function widgetStatusLegalitas(legal) {
+  const aktif    = legal.filter(function (l) { return l.Status === 'Aktif'; }).length;
+  const perbarui = legal.filter(function (l) { return l.Status === 'Perlu Diperbarui'; }).length;
+  const lewat    = legal.filter(function (l) { return l.Status === 'Kadaluarsa'; }).length;
+
+  // Tampilkan yang paling mendesak lebih dulu: kadaluarsa, lalu perlu diperbarui
+  const perluPerhatian = legal
+    .filter(function (l) { return l.Status !== 'Aktif'; })
+    .sort(function (a, b) { return (a.SisaHari === null ? 9999 : a.SisaHari) - (b.SisaHari === null ? 9999 : b.SisaHari); })
+    .slice(0, 3);
+
+  let isi;
+  if (!legal.length) {
+    isi = '<div class="text-muted" style="font-size:12px;margin-top:12px;">' +
+      'Belum ada data legalitas yang tercatat. Hubungi pendamping PPU untuk mendaftarkan legalitas usaha Anda.</div>';
+  } else if (!perluPerhatian.length) {
+    isi = '<div style="font-size:12.5px;margin-top:12px;color:var(--pramandiri-text);">' +
+      '<i class="bi bi-check-circle-fill"></i> Seluruh legalitas usaha Anda dalam keadaan aktif.</div>';
+  } else {
+    isi = '<div style="margin-top:10px;">' + perluPerhatian.map(function (l) {
+      const warna = l.Status === 'Kadaluarsa' ? 'var(--pemula-text)' : 'var(--madya-text)';
+      const ket = l.Status === 'Kadaluarsa'
+        ? 'Kadaluarsa ' + formatTgl(l.TanggalKadaluarsa)
+        : 'Berlaku sampai ' + formatTgl(l.TanggalKadaluarsa) +
+          (l.SisaHari !== null ? ' (' + l.SisaHari + ' hari lagi)' : '');
+      return '<div class="legal-item">' +
+        '<div><div class="legal-nama">' + esc(l.JenisLegalitas) + '</div>' +
+        '<div class="legal-sub">' + esc(ket) + '</div></div>' +
+        '<i class="bi bi-exclamation-triangle-fill" style="color:' + warna + ';"></i></div>';
+    }).join('') + '</div>';
+  }
+
+  return '<div class="panel tier-panel-ringkas">' +
+    '<span class="text-muted" style="font-size:11px;text-transform:uppercase;font-weight:700;">Status Legalitas</span>' +
+    '<div class="legal-ringkas">' +
+      '<div class="legal-kotak legal-aktif"><div class="angka">' + aktif + '</div><div class="label">Aktif</div></div>' +
+      '<div class="legal-kotak legal-perbarui"><div class="angka">' + perbarui + '</div><div class="label">Perbarui</div></div>' +
+      '<div class="legal-kotak legal-lewat"><div class="angka">' + lewat + '</div><div class="label">Lewat</div></div>' +
+    '</div>' + isi +
+    '<a onclick="navigateTo(\'legalitasSaya\')" style="font-size:12px;cursor:pointer;display:block;text-align:center;margin-top:10px;">Lihat Detail Legalitas <i class="bi bi-arrow-right"></i></a>' +
+  '</div>';
+}
+
+/** Blok catatan hasil asesmen dari pendamping. */
+function blokCatatanAsesmen(k) {
+  if (!k) return '';
+  const punyaCatatan = k.CatatanProduksi || k.CatatanPemasaran || k.CatatanKeuangan || k.SaranProgram;
+  if (!punyaCatatan) return '';
+
+  function baris(judul, isi) {
+    if (!isi) return '';
+    return '<div class="catatan-asesmen"><div class="ca-judul">' + judul + '</div>' +
+      '<div class="ca-isi">' + esc(isi) + '</div></div>';
+  }
+
+  return '<div class="panel mb-4">' +
+    '<div class="panel-title">Catatan Hasil Asesmen</div>' +
+    '<div class="panel-sub">Masukan dari pendamping berdasarkan asesmen ' + formatBulanTahun(k.TanggalAsesmen) + '</div>' +
+    '<div class="grid grid-2 mt-3">' +
+      '<div>' +
+        baris('Pilar Produksi', k.CatatanProduksi) +
+        baris('Pilar Pemasaran', k.CatatanPemasaran) +
+        baris('Pilar Keuangan', k.CatatanKeuangan) +
+      '</div>' +
+      '<div>' +
+        baris('Rekomendasi Program yang Perlu Diikuti', k.SaranProgram) +
+      '</div>' +
+    '</div>' +
+    '<div class="d-flex align-center gap-2 mt-2" style="font-size:12px;color:var(--text-muted);border-top:1px solid var(--border-color);padding-top:10px;">' +
+      '<i class="bi bi-person-badge"></i> Asesor: <b style="color:var(--text-primary);">' + esc(k.Asesor || 'Tidak dicantumkan') + '</b>' +
+    '</div>' +
+  '</div>';
 }
