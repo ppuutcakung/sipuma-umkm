@@ -148,7 +148,32 @@ async function loadPengaturan() {
 /** Panel identitas aplikasi — hanya Admin yang boleh mengubah. */
 function panelPengaturanAplikasi() {
   const c = AppState.config || {};
+  const thSekarang = Number(c.tahunAktif) || new Date().getFullYear();
+  const pilihanTahun = [];
+  for (let y = thSekarang - 1; y <= thSekarang + 5; y++) pilihanTahun.push(y);
+
   return '<div class="panel mt-4">' +
+    '<div class="panel-title">Periode Aktif Aplikasi</div>' +
+    '<div class="panel-sub">Menentukan tahun yang tampil secara bawaan bagi semua pengguna. ' +
+      'Data tahun sebelumnya <b>tidak dihapus</b> dan tetap dapat dilihat lewat filter Tahun Data.</div>' +
+    '<div class="grid grid-2 mt-3">' +
+      '<div class="form-group"><label class="form-label">Periode Tahun</label>' +
+        '<select class="form-select" id="cfgPeriode">' +
+          pilihanTahun.map(function (y) {
+            return '<option value="' + y + '"' + (y === thSekarang ? ' selected' : '') + '>' + y + '</option>';
+          }).join('') +
+        '</select></div>' +
+      '<div class="form-group" style="display:flex;align-items:flex-end;">' +
+        '<button class="btn btn-primary" id="btnSimpanPeriode" onclick="simpanPeriodeAktif()">' +
+          '<i class="bi bi-calendar-check"></i> Terapkan Periode</button></div>' +
+    '</div>' +
+    '<div class="text-muted" style="font-size:11.5px;background:var(--canvas);padding:9px 12px;border-radius:8px;">' +
+      '<b>Tidak terpengaruh periode:</b> Data Master UMKM, Asesmen Kemandirian, Legalitas UMKM, ' +
+      'Manajemen User, dan Pengaturan — semuanya berlaku lintas tahun.' +
+    '</div>' +
+  '</div>' +
+
+  '<div class="panel mt-4">' +
     '<div class="panel-title">Identitas Aplikasi</div>' +
     '<div class="panel-sub">Pengaturan ini berlaku untuk semua pengguna SIPUMA. Perubahan langsung terlihat setelah disimpan.</div>' +
     '<div class="grid grid-2 mt-3">' +
@@ -433,4 +458,37 @@ function hapusFotoProfilSaya() {
       showToast('Error', 'Gagal menghapus foto. Silakan coba lagi.', 'danger');
     });
   }, 'Ya, Hapus');
+}
+
+
+/** Terapkan periode (tahun) aktif aplikasi — hanya Admin. */
+function simpanPeriodeAktif() {
+  const btn = document.getElementById('btnSimpanPeriode');
+  const tahun = Number(document.getElementById('cfgPeriode').value);
+
+  showConfirm(
+    'Jadikan <b>tahun ' + tahun + '</b> sebagai periode aktif aplikasi?<br><br>' +
+    'Seluruh pengguna (Admin, CSR UT, dan UMKM) akan melihat data tahun ini secara bawaan, ' +
+    'dan kolom isian tahun ' + tahun + ' siap digunakan.<br><br>' +
+    '<b>Data tahun sebelumnya tetap tersimpan</b> dan masih bisa dilihat lewat filter Tahun Data.',
+    function () {
+      closeModal('modalConfirm');
+      setBtnLoading(btn, 'Menerapkan...');
+      panggilServerAman('setPeriodeAktif', [tahun], function (res) {
+        resetBtn(btn);
+        if (res.success) {
+          AppState.config.tahunAktif = tahun;
+          AppState.tahunDipilih = null;
+          AppState.cache.dashboardOrganisasi = null;
+          AppState.cache.omsetAll = null;
+          AppState.cache.tenagaKerjaAll = null;
+          showToast('Berhasil', res.message, 'success');
+        } else {
+          showToast('Gagal', res.message, 'danger');
+        }
+      }, function () {
+        resetBtn(btn);
+        showToast('Error', 'Gagal menerapkan periode.', 'danger');
+      });
+    }, 'Ya, Terapkan');
 }

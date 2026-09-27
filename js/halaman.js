@@ -31,7 +31,7 @@ function renderMasterUmkm(filterSektor) {
 
   container.innerHTML = `
     ${pageHeader('Manajemen Data', 'Data Master', 'UMKM', 'Kelola profil UMKM binaan: tambah, ubah, dan hapus data pada 4 sektor usaha.',
-      `<button class="btn btn-primary" onclick="formUMKM()"><i class="bi bi-plus-lg"></i> Tambah UMKM</button>`)}
+      `<div class="d-flex gap-2" style="flex-wrap:wrap;">${tombolEkspor('eksporDataMasterUMKM')}<button class="btn btn-primary" onclick="formUMKM()"><i class="bi bi-plus-lg"></i> Tambah UMKM</button></div>`)}
     <div class="table-card">
       <div class="table-toolbar">
         <div class="d-flex gap-2 align-center" style="flex-wrap:wrap;">
@@ -309,7 +309,7 @@ function renderOmsetForm(role, kodeUmkm) {
     </div>
     ${role === 'Admin' ? `
     <div class="panel">
-      <div class="panel-title">Rekap Omset Seluruh UMKM — Tahun ${tahun}</div>
+      <div class="flex-between" style="flex-wrap:wrap;gap:8px;"><div class="panel-title mb-0">Rekap Omset Seluruh UMKM</div>${tombolEkspor('eksporRekapOmset')}</div>
       <div class="text-muted mb-3" style="font-size:12px;">Kolom Target Omset diisi mandiri oleh masing-masing UMKM lewat dashboard omset mereka (wajib diisi sekali per tahun).</div>
       <div id="rekapOmsetArea" class="mt-2"><div class="loading-inline"><div class="spinner"></div></div></div>
     </div>` : `
@@ -320,6 +320,7 @@ function renderOmsetForm(role, kodeUmkm) {
     </div>`}
   `;
   muatFormOmset(kodeUmkm, tahun);
+  muatPanelClosing(kodeUmkm, tahun, 'Omset', 'closingOmsetArea');
   if (role === 'Admin') muatRekapOmset(tahun, 1);
   else muatRiwayatTahunanOmset(kodeUmkm);
 }
@@ -481,6 +482,7 @@ function muatFormOmset(kodeUmkm, tahun) {
       <div class="flex-between" style="border-top:1px solid var(--border-color);padding-top:14px;margin-top:6px;">
         <div class="text-muted" style="font-size:12.5px;">Total Realisasi: <b style="color:var(--text-primary)">${formatRupiahFull(d ? d.TotalRealisasi : 0)}</b> ${d ? `<span class="status-pill ${d.StatusTarget === 'Tercapai' ? 'tercapai' : 'belumtercapai'}" style="margin-left:6px;"><span class="dot"></span>${d.StatusTarget}</span>` : ''}</div>
         <button class="btn btn-primary" id="btnSimpanOmset" onclick="simpanOmset('${kodeUmkm}', ${tahun})"><i class="bi bi-save"></i> Simpan Omset</button>
+        <div id="closingOmsetArea"></div>
       </div>
     `;
   }, () => {
@@ -584,16 +586,17 @@ function renderTenagaKerjaForm(role, kodeUmkm) {
         <div class="form-group"><label class="form-label">Jumlah Tenaga Kerja</label><input type="number" min="0" class="form-control" id="tkJumlah" placeholder="Contoh: 6"></div>
         <div class="form-group"><label class="form-label">Catatan (opsional)</label><textarea class="form-control" id="tkCatatan" placeholder="Contoh: +2 karyawan baru warga RW 04"></textarea></div>
         <button class="btn btn-primary btn-block" id="btnSimpanTk" onclick="simpanTenagaKerja('${kodeUmkm}')"><i class="bi bi-save"></i> Simpan Data Tenaga Kerja</button>
+        <div id="closingTkArea"></div>
       </div>
       <div class="table-card">
-        <div class="table-toolbar"><span class="panel-title mb-0" style="font-size:14px;">Riwayat Tenaga Kerja ${tahun}</span></div>
+        <div class="table-toolbar"><span class="panel-title mb-0" style="font-size:14px;">Riwayat Tenaga Kerja</span></div>
         <div id="tkTableArea"><div class="loading-inline"><div class="spinner"></div></div></div>
       </div>
     </div>
     ${role === 'Admin' ? `
     <div class="panel mt-4">
       <div class="flex-between mb-2" style="flex-wrap:wrap;gap:8px;">
-        <div class="panel-title mb-0">Rekap Tenaga Kerja Seluruh UMKM</div>
+        <div class="panel-title mb-0">Rekap Tenaga Kerja Seluruh UMKM</div>${tombolEkspor('eksporRekapTenagaKerja')}
         <select class="form-select" id="rekapTkFilterSektor" style="width:auto;min-width:160px;" onchange="renderRekapTenagaKerja(1)">
           <option value="">Semua Sektor</option>
           ${optionsHtml(SEKTOR_LIST, null)}
@@ -604,6 +607,7 @@ function renderTenagaKerjaForm(role, kodeUmkm) {
     </div>` : ''}
   `;
   muatTabelTenagaKerja(kodeUmkm, tahun);
+  muatPanelClosing(kodeUmkm, tahun, 'TenagaKerja', 'closingTkArea');
   if (role === 'Admin') muatRekapTenagaKerja(1);
 }
 
@@ -777,7 +781,7 @@ function renderKemandirianForm(kodeUmkm) {
         <div class="text-muted mt-3" style="font-size:12px;">Kelas kemandirian dihitung otomatis dari rata-rata (Produksi + Pemasaran + Keuangan) / 3.</div>
         <div class="mt-4">
           <div class="flex-between mb-2" style="flex-wrap:wrap;gap:8px;">
-            <div class="panel-title mb-0" style="font-size:14px;">Rekap Kelas Kemandirian UMKM</div>
+            <div class="panel-title mb-0" style="font-size:14px;">Rekap Kelas Kemandirian UMKM</div>${tombolEkspor('eksporRekapAsesmen')}
             <select class="form-select" id="kkFilterKelas" style="width:auto;min-width:160px;" onchange="renderRekapKemandirian(1, this.value)">
               <option value="">Semua Status</option>
               <option value="Pemula">Pemula</option>
@@ -1338,7 +1342,7 @@ function renderTenagaKerjaUTPage() {
     ${pageHeader('Monitoring Mitra Binaan', 'Tenaga Kerja', 'UMKM', 'Rekap jumlah tenaga kerja bulan terakhir yang diinput oleh masing-masing UMKM binaan (sama seperti data yang dikelola Admin).', '')}
     <div class="panel">
       <div class="flex-between mb-2" style="flex-wrap:wrap;gap:8px;">
-        <div class="panel-title mb-0">Rekap Tenaga Kerja Seluruh UMKM</div>
+        <div class="panel-title mb-0">Rekap Tenaga Kerja Seluruh UMKM</div>${tombolEkspor('eksporRekapTenagaKerja')}
         <select class="form-select" id="rekapTkFilterSektor" style="width:auto;min-width:160px;" onchange="renderRekapTenagaKerja(1)">
           <option value="">Semua Sektor</option>
           ${optionsHtml(SEKTOR_LIST, null)}
@@ -1495,12 +1499,28 @@ function loadLaporanCsrUT() {
   });
 }
 
-function renderLaporanCsr(rows, isAdmin) {
-  rows = [...rows].sort((a,b) => new Date(b.TanggalUpload) - new Date(a.TanggalUpload));
+function renderLaporanCsr(rows, isAdmin, tahunFilter) {
+  const semua = [...rows].sort((a,b) => new Date(b.TanggalUpload) - new Date(a.TanggalUpload));
+  // Kumpulkan tahun yang benar-benar punya laporan, untuk mengisi filter
+  const daftarTahun = Array.from(new Set(semua.map(f => Number(f.Tahun)).filter(Boolean))).sort((a,b) => b - a);
+  const tahunAktif = tahunFilter !== undefined && tahunFilter !== null && tahunFilter !== ''
+    ? Number(tahunFilter) : '';
+  rows = tahunAktif ? semua.filter(f => Number(f.Tahun) === tahunAktif) : semua;
+  _laporanCsrIsAdmin = isAdmin;
+
+  const filterHtml =
+    `<div class="d-flex gap-2 align-center" style="flex-wrap:wrap;">
+      <label class="form-label mb-0" style="white-space:nowrap;">Tahun Data</label>
+      <select class="form-select" style="width:auto;height:34px;" onchange="gantiTahunLaporanCsr(this.value)">
+        <option value="">Semua Tahun</option>
+        ${daftarTahun.map(y => `<option value="${y}"${y === tahunAktif ? ' selected' : ''}>${y}</option>`).join('')}
+      </select>
+      ${isAdmin ? `<button class="btn btn-primary" onclick="formUploadLaporan()"><i class="bi bi-upload"></i> Upload Baru</button>` : ''}
+    </div>`;
+
   const container = document.getElementById('app-container');
   container.innerHTML = `
-    ${pageHeader('Arsip Resmi', isAdmin ? 'Laporan CSR' : 'File Laporan', isAdmin ? '(PDF)' : 'PPU', 'Laporan bulanan resmi program CSR yang dapat diakses oleh Tim CSR United Tractors.',
-      isAdmin ? `<button class="btn btn-primary" onclick="formUploadLaporan()"><i class="bi bi-upload"></i> Upload Baru</button>` : '')}
+    ${pageHeader('Arsip Resmi', isAdmin ? 'Laporan CSR' : 'File Laporan', isAdmin ? '(PDF)' : 'PPU', 'Laporan bulanan resmi program CSR yang dapat diakses oleh Tim CSR United Tractors.', filterHtml)}
     <div class="grid grid-2">
       ${rows.length ? rows.map(f => `
         <div class="file-item">
@@ -1902,4 +1922,107 @@ function ubahStatusAktifUMKM(kodeUnik, jadikanAktif) {
       showToast('Error', 'Gagal mengubah status. Silakan coba lagi.', 'danger');
     });
   }, jadikanAktif ? 'Ya, Aktifkan' : 'Ya, Nonaktifkan');
+}
+
+
+// ── Filter tahun pada Laporan CSR ──
+let _laporanCsrIsAdmin = true;
+function gantiTahunLaporanCsr(tahun) {
+  renderLaporanCsr(AppState.cache.laporanCsr || [], _laporanCsrIsAdmin, tahun);
+}
+
+// ════════════════════════════════════════════════════════
+// CLOSING PERIODE — Kunci Data Omset & Tenaga Kerja
+// ════════════════════════════════════════════════════════
+// Penguncian ditegakkan di SERVER. Tampilan di sini hanya cerminannya,
+// sehingga walau tombol disembunyikan, server tetap jadi penentu akhir.
+
+/** Muat status closing lalu tampilkan panelnya. */
+function muatPanelClosing(kodeUmkm, tahun, jenis, idArea) {
+  const area = document.getElementById(idArea);
+  if (!area || !kodeUmkm) return;
+  panggilServerAman('getStatusClosing', [kodeUmkm, tahun], function (res) {
+    if (!res.success) { area.innerHTML = ''; return; }
+    renderPanelClosing(kodeUmkm, tahun, jenis, idArea, res.data);
+  }, function () { area.innerHTML = ''; });
+}
+
+function renderPanelClosing(kodeUmkm, tahun, jenis, idArea, status) {
+  const area = document.getElementById(idArea);
+  if (!area) return;
+  const terkunci = jenis === 'Omset' ? status.omset : status.tenagaKerja;
+  const isAdmin = AppState.session.role === 'Admin';
+  const labelData = jenis === 'Omset' ? 'omset' : 'tenaga kerja';
+
+  if (terkunci) {
+    area.innerHTML =
+      '<div class="panel mt-3" style="background:var(--pramandiri-bg);border-left:4px solid var(--pramandiri-accent);">' +
+        '<div class="d-flex flex-between align-center" style="flex-wrap:wrap;gap:10px;">' +
+          '<div style="font-size:13px;color:var(--pramandiri-text);">' +
+            '<b><i class="bi bi-lock-fill"></i> Periode ' + tahun + ' sudah dikunci (closing).</b><br>' +
+            '<span style="font-size:12px;">Data ' + labelData + ' tahun ini tidak dapat diubah lagi.' +
+            (isAdmin ? '' : ' Hubungi Admin bila ada yang perlu diperbaiki.') + '</span>' +
+          '</div>' +
+          (isAdmin
+            ? '<button class="btn btn-outline btn-sm" onclick="bukaClosingPeriode(\'' + kodeUmkm + '\',' + tahun + ',\'' + jenis + '\',\'' + idArea + '\')">' +
+              '<i class="bi bi-unlock"></i> Buka Kunci</button>'
+            : '') +
+        '</div></div>';
+    return;
+  }
+
+  area.innerHTML =
+    '<div class="panel mt-3" style="background:var(--canvas);">' +
+      '<div class="d-flex flex-between align-center" style="flex-wrap:wrap;gap:10px;">' +
+        '<div style="font-size:12.5px;">' +
+          '<b>Closing Periode ' + tahun + '</b><br>' +
+          '<span class="text-muted" style="font-size:11.5px;">Kunci data ' + labelData + ' tahun ' + tahun +
+          ' bila pengisian sudah lengkap sampai Desember. Setelah dikunci, data tidak dapat diubah lagi.</span>' +
+        '</div>' +
+        '<button class="btn btn-outline btn-sm" onclick="lakukanClosing(\'' + kodeUmkm + '\',' + tahun + ',\'' + jenis + '\',\'' + idArea + '\')">' +
+          '<i class="bi bi-lock"></i> Closing Periode</button>' +
+      '</div></div>';
+}
+
+function lakukanClosing(kodeUmkm, tahun, jenis, idArea) {
+  const labelData = jenis === 'Omset' ? 'omset' : 'tenaga kerja';
+  showConfirm(
+    'Kunci data <b>' + labelData + ' tahun ' + tahun + '</b>?<br><br>' +
+    'Setelah dikunci, data tahun ini <b>tidak dapat diubah lagi</b> — termasuk oleh Admin, ' +
+    'kecuali Admin membukanya kembali.<br><br>' +
+    'Pastikan pengisian sudah lengkap sampai bulan Desember sebelum melanjutkan.',
+    function () {
+      closeModal('modalConfirm');
+      panggilServerAman('setClosing', [kodeUmkm, tahun, jenis], function (res) {
+        if (res.success) {
+          showToast('Berhasil', res.message, 'success');
+          muatPanelClosing(kodeUmkm, tahun, jenis, idArea);
+          // Muat ulang form agar kolom isian ikut terkunci
+          if (jenis === 'Omset') muatFormOmset(kodeUmkm, tahun);
+          else muatTabelTenagaKerja(kodeUmkm, tahun);
+        } else {
+          showToast('Gagal', res.message, 'danger');
+        }
+      }, function () { showToast('Error', 'Gagal melakukan closing.', 'danger'); });
+    }, 'Ya, Kunci Periode');
+}
+
+function bukaClosingPeriode(kodeUmkm, tahun, jenis, idArea) {
+  showConfirm(
+    'Buka kembali kunci data tahun ' + tahun + '?<br><br>' +
+    'Setelah dibuka, data tahun ini <b>dapat diubah kembali</b>. ' +
+    'Sebaiknya dikunci ulang setelah perbaikan selesai.',
+    function () {
+      closeModal('modalConfirm');
+      panggilServerAman('bukaClosing', [kodeUmkm, tahun, jenis], function (res) {
+        if (res.success) {
+          showToast('Berhasil', res.message, 'success');
+          muatPanelClosing(kodeUmkm, tahun, jenis, idArea);
+          if (jenis === 'Omset') muatFormOmset(kodeUmkm, tahun);
+          else muatTabelTenagaKerja(kodeUmkm, tahun);
+        } else {
+          showToast('Gagal', res.message, 'danger');
+        }
+      }, function () { showToast('Error', 'Gagal membuka kunci.', 'danger'); });
+    }, 'Ya, Buka Kunci');
 }

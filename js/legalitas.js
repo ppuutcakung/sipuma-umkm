@@ -76,7 +76,7 @@ function renderLegalitasAdmin() {
   document.getElementById('app-container').innerHTML =
     pageHeader('Kepatuhan Usaha', 'Legalitas', 'UMKM',
       'Catat dan pantau masa berlaku legalitas UMKM binaan, agar tidak ada yang terlewat kadaluarsa.',
-      '<button class="btn btn-primary" onclick="formLegalitas()"><i class="bi bi-plus-lg"></i> Tambah Legalitas</button>') +
+      '<div class="d-flex gap-2" style="flex-wrap:wrap;">' + tombolEkspor('eksporLegalitas') + '<button class="btn btn-primary" onclick="formLegalitas()"><i class="bi bi-plus-lg"></i> Tambah Legalitas</button></div>') +
 
     '<div class="grid grid-4 mb-4">' +
       '<div class="kpi-card c-blue"><div class="kpi-label">Total Dokumen</div><div class="kpi-value">' + rows.length + '</div></div>' +

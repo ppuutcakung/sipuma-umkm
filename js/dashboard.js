@@ -9,7 +9,7 @@ async function loadDashboard() {
   const sec = AppState.currentSection;
 
   if (role === 'UMKM') {
-    const res = await panggilAPI('getDashboardUMKM', []);
+    const res = await panggilAPI('getDashboardUMKM', [null, AppState.tahunDipilih || null]);
     if (AppState.currentSection !== sec) return;
     if (!res.success) { wadah.innerHTML = areaGagal('Gagal memuat dashboard.', 'loadDashboard()'); return; }
     renderDashboardUMKM(res.data);
@@ -34,6 +34,14 @@ async function gantiTahunDashboard(tahun) {
   const wadah = document.getElementById('app-container');
   wadah.innerHTML = areaMemuat();
   const sec = AppState.currentSection;
+  AppState.tahunDipilih = Number(tahun);
+  if (role === 'UMKM') {
+    const resU = await panggilAPI('getDashboardUMKM', [null, Number(tahun)]);
+    if (AppState.currentSection !== sec) return;
+    if (!resU.success) { wadah.innerHTML = areaGagal('Gagal memuat dashboard.', 'loadDashboard()'); return; }
+    renderDashboardUMKM(resU.data);
+    return;
+  }
   const res = await panggilAPI('getDashboardOrganisasi', [Number(tahun)]);
   if (AppState.currentSection !== sec) return;
   if (!res.success) { wadah.innerHTML = areaGagal('Gagal memuat dashboard.', 'loadDashboard()'); return; }
@@ -50,19 +58,11 @@ function renderDashboardOrganisasi(d, role) {
   const rataPendapatan = d.totalUMKM ? (d.totalOmset / d.totalUMKM / 12) : 0;
   const rataTenagaKerja = d.totalUMKM ? Math.round(d.totalTenagaKerja / d.totalUMKM) : 0;
 
-  const daftarTahun = (d.daftarTahun && d.daftarTahun.length) ? d.daftarTahun : [d.tahun];
-  const filterTahun =
-    '<div class="d-flex gap-2 align-center">' +
-      '<label class="form-label mb-0" style="white-space:nowrap;">Tahun Data</label>' +
-      '<select class="form-select" style="width:auto;height:34px;" onchange="gantiTahunDashboard(this.value)">' +
-        daftarTahun.map(function (t) {
-          return '<option value="' + t + '"' + (Number(t) === Number(d.tahun) ? ' selected' : '') + '>' + t + '</option>';
-        }).join('') +
-      '</select></div>';
+  const filterTahun = filterTahunDashboard(d);
 
   wadah.innerHTML =
     pageHeader('Ringkasan Program', 'Dashboard', 'Utama',
-      'Ikhtisar perkembangan seluruh UMKM binaan PPU UT Cakung — data kumulatif (YTD) tahun ' + d.tahun + '.',
+      'Ikhtisar perkembangan seluruh UMKM binaan PPU UT Cakung — data kumulatif (YTD) sesuai tahun yang dipilih.',
       filterTahun) +
 
     '<div class="grid grid-4 mb-4">' +
@@ -72,7 +72,7 @@ function renderDashboardOrganisasi(d, role) {
         '<div class="kpi-meta">Kuliner: ' + d.perSektor.Kuliner + ' | Kerajinan: ' + d.perSektor.Kerajinan + ' | Pertanian: ' + d.perSektor.Pertanian + ' | Manufaktur: ' + d.perSektor.Manufaktur + '</div>' +
       '</div>' +
       '<div class="kpi-card c-blue">' +
-        '<div class="kpi-top"><span class="kpi-label">Total Omset (' + d.tahun + ' YTD)</span><span class="kpi-icon"><i class="bi bi-cash-stack"></i></span></div>' +
+        '<div class="kpi-top"><span class="kpi-label">Total Omset (YTD)</span><span class="kpi-icon"><i class="bi bi-cash-stack"></i></span></div>' +
         '<div class="kpi-value">' + formatRupiah(d.totalOmset) + '</div>' +
         '<div class="kpi-meta">Rata-rata Pendapatan UMKM &nbsp; <b>' + formatRupiah(rataPendapatan) + '/bln</b></div>' +
       '</div>' +
@@ -84,19 +84,19 @@ function renderDashboardOrganisasi(d, role) {
       '<div class="kpi-card c-green">' +
         '<div class="kpi-top"><span class="kpi-label">Fasilitasi Pemasaran</span><span class="kpi-icon"><i class="bi bi-megaphone-fill"></i></span></div>' +
         '<div class="kpi-value">' + formatRupiah(d.totalFasilitasi) + '</div>' +
-        '<div class="kpi-meta">Target ' + d.tahun + ': <b>' + formatRupiah(d.targetFasilitasi) + '</b> (' + persenFasilitasi + '%)</div>' +
+        '<div class="kpi-meta">Target: <b>' + formatRupiah(d.targetFasilitasi) + '</b> (' + persenFasilitasi + '%)</div>' +
       '</div>' +
     '</div>' +
 
     // Dua grafik bersebelahan: Omset dan Tenaga Kerja
     '<div class="grid grid-2 mb-4">' +
       '<div class="panel">' +
-        '<div class="panel-title">Tren Omset Bulanan ' + d.tahun + '</div>' +
+        '<div class="panel-title">Tren Omset Bulanan</div>' +
         '<div class="panel-sub">Akumulasi omset UMKM binaan per bulan</div>' +
         '<div style="height:260px;margin-top:12px;"><canvas id="chartOmset"></canvas></div>' +
       '</div>' +
       '<div class="panel">' +
-        '<div class="panel-title">Perkembangan Tenaga Kerja ' + d.tahun + '</div>' +
+        '<div class="panel-title">Perkembangan Tenaga Kerja</div>' +
         '<div class="panel-sub">Jumlah tenaga kerja terserap per bulan</div>' +
         '<div style="height:260px;margin-top:12px;"><canvas id="chartTenagaKerja"></canvas></div>' +
       '</div>' +
@@ -233,7 +233,8 @@ function renderDashboardUMKM(d) {
 
   wadah.innerHTML =
     pageHeader('Ringkasan Usaha Saya', 'Dashboard', 'Bisnis UMKM Saya',
-      'Pantau realisasi omset, penyerapan tenaga kerja, status legalitas, dan kelas kemandirian usaha Anda.', '') +
+      'Pantau realisasi omset, penyerapan tenaga kerja, status legalitas, dan kelas kemandirian usaha Anda.',
+      filterTahunDashboard(d)) +
 
     // ── Baris 1: tiga widget ringkas & sejajar ──
     '<div class="grid grid-3 mb-4">' +
@@ -245,12 +246,12 @@ function renderDashboardUMKM(d) {
     // ── Baris 2: dua grafik bersebelahan ──
     '<div class="grid grid-2 mb-4">' +
       '<div class="panel">' +
-        '<div class="panel-title">Tren Omset Bulanan ' + d.tahun + '</div>' +
+        '<div class="panel-title">Tren Omset Bulanan</div>' +
         '<div class="panel-sub">Realisasi omset usaha Anda per bulan</div>' +
         '<div style="height:250px;margin-top:12px;"><canvas id="chartOmset"></canvas></div>' +
       '</div>' +
       '<div class="panel">' +
-        '<div class="panel-title">Perkembangan Tenaga Kerja ' + d.tahun + '</div>' +
+        '<div class="panel-title">Perkembangan Tenaga Kerja</div>' +
         '<div class="panel-sub">Jumlah tenaga kerja usaha Anda per bulan</div>' +
         '<div style="height:250px;margin-top:12px;"><canvas id="chartTenagaKerja"></canvas></div>' +
         '<div class="d-flex flex-between mt-2" style="font-size:12px;">' +
@@ -325,7 +326,7 @@ function widgetRealisasiOmset(d, persen) {
   // menempel di DASAR kartu — sejajar dengan baris "Dinilai" pada widget
   // Status Kemandirian di sebelahnya, walau isi tengahnya berbeda tinggi.
   return '<div class="panel tier-panel-ringkas" style="display:flex;flex-direction:column;">' +
-    '<span class="text-muted" style="font-size:11px;text-transform:uppercase;font-weight:700;">Realisasi Omset ' + d.tahun + '</span>' +
+    '<span class="text-muted" style="font-size:11px;text-transform:uppercase;font-weight:700;">Realisasi Omset</span>' +
 
     '<div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:6px 0;">' +
       '<div style="font-size:26px;font-weight:800;line-height:1.15;letter-spacing:-0.5px;">' +
@@ -418,4 +419,17 @@ function blokCatatanAsesmen(k) {
       '<i class="bi bi-person-badge"></i> Asesor: <b style="color:var(--text-primary);">' + esc(k.Asesor || 'Tidak dicantumkan') + '</b>' +
     '</div>' +
   '</div>';
+}
+
+
+/** Pemilih Tahun Data — dipakai bersama oleh dashboard Admin, CSR UT, dan UMKM. */
+function filterTahunDashboard(d) {
+  const daftar = (d.daftarTahun && d.daftarTahun.length) ? d.daftarTahun : [d.tahun];
+  return '<div class="d-flex gap-2 align-center">' +
+    '<label class="form-label mb-0" style="white-space:nowrap;">Tahun Data</label>' +
+    '<select class="form-select" style="width:auto;height:34px;" onchange="gantiTahunDashboard(this.value)">' +
+      daftar.map(function (t) {
+        return '<option value="' + t + '"' + (Number(t) === Number(d.tahun) ? ' selected' : '') + '>' + t + '</option>';
+      }).join('') +
+    '</select></div>';
 }
