@@ -12,67 +12,14 @@
  * @param {Object} opsi    { tanpaToken, percobaan }
  * @returns {Promise<{success:boolean, data:*, message:string}>}
  */
-async function panggilAPI(action, args, opsi) {
-  opsi = opsi || {};
-  const maksPercobaan = opsi.percobaan || 3;
-
-  if (!GAS_URL || GAS_URL === 'GANTI_DENGAN_URL_EXEC_ANDA') {
-    const pesan = 'Alamat server belum dikonfigurasi. Isi GAS_URL di file js/config.js.';
-    showToast('Belum Terkonfigurasi', pesan, 'danger');
-    return { success: false, data: null, message: pesan };
-  }
-
-  const payload = { action: action, args: args || [] };
-  if (!opsi.tanpaToken) {
-    const sesi = AppState.session;
-    if (!sesi || !sesi.token) {
-      tanganiSesiHabis();
-      return { success: false, data: null, message: 'Belum login.' };
-    }
-    payload.token = sesi.token;
-  }
-
-  let galatTerakhir = null;
-
-  for (let percobaan = 1; percobaan <= maksPercobaan; percobaan++) {
-    try {
-      const res = await fetch(GAS_URL, {
-        method: 'POST',
-        // ⚠️ WAJIB text/plain — Content-Type JSON memicu preflight CORS
-        // yang diblokir Google Apps Script.
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(payload),
-        redirect: 'follow'
-      });
-
-      if (!res.ok) throw new Error('Server membalas status ' + res.status);
-
-      const hasil = await res.json();
-
-      // Sesi habis / token tidak sah → paksa login ulang
-      if (hasil && hasil.sesiHabis) {
-        tanganiSesiHabis();
-        return hasil;
-      }
-      return hasil;
-
-    } catch (err) {
-      galatTerakhir = err;
-      // Jeda bertingkat sebelum mencoba lagi (0.6s, 1.2s, ...)
-      if (percobaan < maksPercobaan) {
-        await new Promise(function (r) { setTimeout(r, 600 * percobaan); });
-      }
-    }
-  }
-
-  console.error('SIPUMA API gagal (' + action + '):', galatTerakhir);
-  return {
-    success: false,
-    data: null,
-    gagalKoneksi: true, // penanda: server tidak tercapai (bukan menolak)
-    message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda, lalu coba lagi.'
-  };
-}
+// CATATAN: panggilAPI() versi GAS sudah DIHAPUS dari berkas ini.
+// Sejak pindah ke Firebase, fungsi itu didefinisikan di firestore-api.js
+// (berbicara langsung ke Firestore), dan permintaan yang memang masih
+// perlu GAS — unggah berkas & kredensial — dilayani panggilGAS() di sana.
+//
+// Dulu keduanya sempat ada bersamaan dan yang berlaku ditentukan urutan
+// pemuatan skrip. Cara itu rapuh: menggeser satu baris di index.html bisa
+// diam-diam mengembalikan jalur lama. Karena itu definisi lamanya dibuang.
 
 /** Sesi berakhir: bersihkan dan kembalikan pengguna ke halaman login. */
 function tanganiSesiHabis() {

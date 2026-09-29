@@ -95,7 +95,7 @@ function renderMasterUmkmTabel(halaman) {
   area.innerHTML = `
       <div style="overflow-x:auto;">
       <table class="sipuma-table">
-        <thead><tr><th>Kode Unik</th><th>Nama UMKM</th><th>Sektor</th><th>Spesialisasi</th><th>Binaan Sejak</th><th>Status</th><th>Aksi</th></tr></thead>
+        <thead><tr><th>Kode Unik</th><th>Nama UMKM</th><th>Sektor</th><th>Spesialisasi</th><th>WhatsApp</th><th>Binaan Sejak</th><th>Status</th><th>Aksi</th></tr></thead>
         <tbody>
           ${rowsHalamanIni.length ? rowsHalamanIni.map(u => `
             <tr>
@@ -103,6 +103,9 @@ function renderMasterUmkmTabel(halaman) {
               <td>${esc(u.NamaUMKM)}</td>
               <td><span class="sector-tag">${esc(u.SektorUsaha)}</span></td>
               <td>${esc(u.Spesialisasi)}</td>
+              <td>${u.NoHP
+                ? `<a href="https://wa.me/${rapikanNomorWA(u.NoHP)}" target="_blank" style="font-size:12.5px;white-space:nowrap;"><i class="bi bi-whatsapp" style="color:#25D366;"></i> ${esc(u.NoHP)}</a>`
+                : `<span class="text-muted" style="font-size:11.5px;">belum diisi</span>`}</td>
               <td>${formatBulanTahun(u.TanggalBinaan)}</td>
               <td>
                 <span class="status-pill ${umkmAktif(u) ? 'allowed' : 'blocked'}"><span class="dot"></span>${umkmAktif(u) ? 'Aktif' : 'Tidak Aktif'}</span>
@@ -112,7 +115,7 @@ function renderMasterUmkmTabel(halaman) {
                 <button class="action-icon-btn ${umkmAktif(u) ? 'danger' : ''}" title="${umkmAktif(u) ? 'Nonaktifkan' : 'Aktifkan'}" onclick="ubahStatusAktifUMKM('${u.KodeUnik}', ${umkmAktif(u) ? 'false' : 'true'})"><i class="bi bi-${umkmAktif(u) ? 'toggle-on' : 'toggle-off'}"></i></button>
                 <button class="action-icon-btn danger" title="Hapus" onclick="hapusUMKM('${u.KodeUnik}')"><i class="bi bi-trash"></i></button>
               </td>
-            </tr>`).join('') : `<tr><td colspan="7"><div class="table-empty"><i class="bi bi-inbox"></i>${kataKunci ? 'Tidak ada UMKM yang cocok dengan pencarian.' : 'Belum ada data UMKM.'}</div></td></tr>`}
+            </tr>`).join('') : `<tr><td colspan="8"><div class="table-empty"><i class="bi bi-inbox"></i>${kataKunci ? 'Tidak ada UMKM yang cocok dengan pencarian.' : 'Belum ada data UMKM.'}</div></td></tr>`}
         </tbody>
       </table>
       </div>
@@ -140,6 +143,10 @@ function formUMKM(data) {
       <div class="form-group"><label class="form-label">Dibina Sejak (Bulan & Tahun)</label><input type="month" class="form-control" id="fUmkmTglBinaan" value="${tglBinaanDefault}"></div>
     </div>
     <div class="form-group"><label class="form-label">Alamat Usaha</label><input class="form-control" id="fUmkmAlamat" value="${isEdit ? esc(data.AlamatUsaha) : ''}" placeholder="Contoh: Cakung, Jakarta Timur"></div>
+    <div class="form-group"><label class="form-label">Nomor HP / WhatsApp</label>
+      <input class="form-control" id="fUmkmNoHP" value="${isEdit ? esc(data.NoHP || '') : ''}" placeholder="Contoh: 081234567890">
+      <div class="login-hint">Dipakai untuk mengirim pengingat legalitas lewat WhatsApp. Boleh diawali 0 atau 62.</div>
+    </div>
   `;
   const footer = `<button class="btn btn-outline" onclick="closeModal('modalGeneric')">Batal</button>
     <button class="btn btn-primary" id="btnSimpanUmkm" onclick="simpanUMKM(${isEdit})"><i class="bi bi-save"></i> Simpan</button>`;
@@ -158,6 +165,7 @@ function simpanUMKM(isEdit) {
     SektorUsaha: document.getElementById('fUmkmSektor').value,
     Spesialisasi: document.getElementById('fUmkmSpesialisasi').value.trim(),
     AlamatUsaha: document.getElementById('fUmkmAlamat').value.trim(),
+    NoHP: document.getElementById('fUmkmNoHP').value.trim(),
     // PENTING: kirim sebagai TEKS ('YYYY-MM', format Bulan & Tahun saja —
     // dari <input type="month">), BUKAN objek Date() langsung. Terbukti
     // dari error "Failed due to illegal value in property: TanggalBinaan"
@@ -200,6 +208,10 @@ function simpanUMKM(isEdit) {
             ID: res.data && res.data.id ? res.data.id : '',
             NamaUMKM: data.NamaUMKM, KodeUnik: kodeBaru, SektorUsaha: data.SektorUsaha,
             Spesialisasi: data.Spesialisasi, AlamatUsaha: data.AlamatUsaha,
+            // NoHP & StatusAktif WAJIB ikut. Sebelumnya terlewat, sehingga
+            // datanya tersimpan di server tetapi hilang dari tampilan —
+            // membuat nomor HP tampak "tidak tersimpan" padahal ada.
+            NoHP: data.NoHP || '', StatusAktif: 'Aktif',
             TanggalBinaan: data.TanggalBinaan, FotoURL: '', TerakhirUpdate: new Date()
           });
           if (AppState.cache.users) {
@@ -1244,7 +1256,7 @@ function renderPrestasiTabel(halaman) {
       <div style="overflow-x:auto;">
       <table class="sipuma-table">
         <thead><tr><th>UMKM</th><th>Kategori</th><th>Deskripsi</th><th>Periode</th><th>Dicatat</th><th>Aksi</th></tr></thead>
-        <tbody>${rowsHalamanIni.length ? rowsHalamanIni.map(r => `<tr><td><b>${esc(r.NamaUMKM)}</b></td><td><span class="sector-tag">${esc(r.KategoriPrestasi)}</span></td><td style="max-width:340px;">${esc(r.DeskripsiPrestasi)}</td><td>${esc(r.Bulan)} ${esc(r.Tahun)}</td><td class="text-muted">${formatTgl(r.TanggalPencatatan)}</td><td><button class="action-icon-btn primary" title="Ubah" onclick='formPrestasi(${JSON.stringify(r)})'><i class="bi bi-pencil"></i></button><button class="action-icon-btn danger" title="Hapus" onclick="hapusPrestasi('${r.ID}')"><i class="bi bi-trash"></i></button></td></tr>`).join('') : `<tr><td colspan="7"><div class="table-empty"><i class="bi bi-inbox"></i>${kataKunci ? 'Tidak ada catatan yang cocok.' : 'Belum ada catatan prestasi.'}</div></td></tr>`}</tbody>
+        <tbody>${rowsHalamanIni.length ? rowsHalamanIni.map(r => `<tr><td><b>${esc(r.NamaUMKM)}</b></td><td><span class="sector-tag">${esc(r.KategoriPrestasi)}</span></td><td style="max-width:340px;">${esc(r.DeskripsiPrestasi)}</td><td>${esc(r.Bulan)} ${esc(r.Tahun)}</td><td class="text-muted">${formatTgl(r.TanggalPencatatan)}</td><td><button class="action-icon-btn primary" title="Ubah" onclick='formPrestasi(${JSON.stringify(r)})'><i class="bi bi-pencil"></i></button><button class="action-icon-btn danger" title="Hapus" onclick="hapusPrestasi('${r.ID}')"><i class="bi bi-trash"></i></button></td></tr>`).join('') : `<tr><td colspan="8"><div class="table-empty"><i class="bi bi-inbox"></i>${kataKunci ? 'Tidak ada catatan yang cocok.' : 'Belum ada catatan prestasi.'}</div></td></tr>`}</tbody>
       </table>
       </div>
       ${totalHalaman > 1 ? `
@@ -1641,6 +1653,7 @@ function loadProfilSaya() {
         <div class="avatar-circle" style="width:96px;height:96px;font-size:32px;margin:0 auto 14px;" id="profilAvatarBig">${AppState.session.fotoURL ? `<img src="${normalizeFotoUrl(AppState.session.fotoURL)}">` : (p.NamaUMKM||'?')[0]}</div>
         <input type="file" id="fotoUmkmInput" accept="image/*" style="display:none;" onchange="uploadFotoUMKM()">
         <button class="btn btn-outline btn-sm" onclick="document.getElementById('fotoUmkmInput').click()"><i class="bi bi-camera"></i> Ganti Foto</button>
+        ${AppState.session.fotoURL ? `<button class="btn btn-outline btn-sm mt-2" id="btnHapusFotoUmkm" onclick="hapusFotoUMKM()" style="color:var(--pemula-text);border-color:var(--pemula-text);"><i class="bi bi-trash"></i> Hapus Foto</button>` : ''}
       </div>
       <div class="panel">
         <div class="grid grid-2 mb-3">
@@ -1676,19 +1689,59 @@ function simpanProfilUMKM() {
 async function uploadFotoUMKM() {
   const file = document.getElementById('fotoUmkmInput').files[0];
   if (!file) return;
+  if (file.size > 2 * 1024 * 1024) {
+    showToast('Peringatan', 'Ukuran foto melebihi 2 MB.', 'warning');
+    return;
+  }
   try {
     const base64 = await readFileAsBase64(file);
-    panggilServerAman('uploadFotoProfil', [base64, file.name, file.type], (res) => {
+    // Argumen ke-4 = foto lama, supaya berkasnya dihapus dari Drive dan
+    // tidak menumpuk setiap kali diganti.
+    const res = await panggilAPI('uploadFoto',
+      [base64, file.name, file.type, AppState.session.fotoURL || '']);
+
+    if (!res.success || !res.data) {
+      showToast('Gagal', res.message || 'Foto gagal diunggah.', 'danger');
+      return;
+    }
+    const url = res.data.fotoURL || res.data.fileUrl;
+    await panggilAPI('updateProfil', [AppState.session.alamat || '', url]);
+
+    AppState.session.fotoURL = url;
+    // Memakai simpanSesiLokal(), bukan kunci lama 'sipuma_session'.
+    // Kunci penyimpanan sesi sudah berganti sejak pindah ke Firebase —
+    // menulis ke kunci lama membuat foto hilang lagi saat halaman dimuat ulang.
+    simpanSesiLokal(AppState.session);
+
+    const avatar = document.getElementById('profilAvatarBig');
+    if (avatar) avatar.innerHTML = '<img src="' + esc(normalizeFotoUrl(url)) + '">';
+    renderShellPeran();
+    loadProfilSaya();          // segarkan agar tombol Hapus ikut muncul
+    showToast('Berhasil', 'Foto profil berhasil diperbarui.', 'success');
+  } catch (e) {
+    showToast('Error', 'Gagal mengunggah foto: ' + e.message, 'danger');
+  }
+}
+
+/** Hapus foto profil usaha (berkas di Drive ikut dihapus). */
+function hapusFotoUMKM() {
+  showConfirm('Hapus foto profil usaha Anda? Berkas fotonya juga akan dihapus dari Google Drive.',
+    async function () {
+      closeModal('modalConfirm');
+      const btn = document.getElementById('btnHapusFotoUmkm');
+      setBtnLoading(btn, 'Menghapus...');
+      const res = await panggilAPI('hapusFotoProfil', []);
+      resetBtn(btn);
       if (res.success) {
-        showToast('Berhasil', 'Foto berhasil diupload.', 'success');
-        panggilServerAman('updateProfilUMKM', [AppState.session.idUmkm, null, res.data.fileUrl], () => {}, () => {});
-        AppState.session.fotoURL = res.data.fileUrl;
-        safeStorageSet('sipuma_session', JSON.stringify(AppState.session));
-        document.getElementById('profilAvatarBig').innerHTML = `<img src="${res.data.fileUrl}">`;
-        renderShellForRole();
-      } else showToast('Gagal', res.message, 'danger');
-    }, () => showToast('Error', 'Gagal mengupload setelah beberapa percobaan. Silakan coba lagi.', 'danger'), 2, 25000);
-  } catch (e) { showToast('Error', e.message, 'danger'); }
+        AppState.session.fotoURL = '';
+        simpanSesiLokal(AppState.session);
+        renderShellPeran();
+        loadProfilSaya();
+        showToast('Berhasil', 'Foto profil berhasil dihapus.', 'success');
+      } else {
+        showToast('Gagal', res.message || 'Gagal menghapus foto.', 'danger');
+      }
+    }, 'Ya, Hapus');
 }
 
 
@@ -1800,7 +1853,7 @@ function renderUserAksesTabel(halaman) {
               <button class="action-icon-btn ${u.StatusAksesLogin === 'Allowed' ? 'danger' : ''}" title="${u.StatusAksesLogin === 'Allowed' ? 'Blokir' : 'Buka Akses'}" onclick="toggleAkses('${esc(u.Username)}','${u.StatusAksesLogin}')"><i class="bi bi-${u.StatusAksesLogin === 'Allowed' ? 'lock' : 'unlock'}"></i></button>
               ${(u.Role !== 'Admin' && u.Role !== 'UT') ? `<button class="action-icon-btn danger" title="Hapus" onclick="hapusUser('${esc(u.Username)}')"><i class="bi bi-trash"></i></button>` : `<span class="text-muted" style="font-size:10.5px;" title="Akun sistem tidak dapat dihapus"><i class="bi bi-shield-lock"></i></span>`}
             </td>
-          </tr>`).join('') : `<tr><td colspan="7"><div class="table-empty"><i class="bi bi-inbox"></i>${kataKunci ? 'Tidak ada user yang cocok.' : 'Belum ada data user.'}</div></td></tr>`}
+          </tr>`).join('') : `<tr><td colspan="8"><div class="table-empty"><i class="bi bi-inbox"></i>${kataKunci ? 'Tidak ada user yang cocok.' : 'Belum ada data user.'}</div></td></tr>`}
         </tbody>
       </table>
       </div>

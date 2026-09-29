@@ -146,6 +146,9 @@ function renderLegalitasTabel(halaman) {
           '<td style="font-size:12px;">' + esc(keteranganMasaBerlaku(l)) + '</td>' +
           '<td>' + lencanaStatusLegalitas(l) + '</td>' +
           '<td>' +
+            (l.Status !== 'Aktif'
+              ? '<button class="action-icon-btn" style="color:#25D366;border-color:#25D366;" title="Kirim pengingat WhatsApp" onclick="kirimPengingatWA(\'' + esc(l.ID) + '\')"><i class="bi bi-whatsapp"></i></button>'
+              : '') +
             '<button class="action-icon-btn primary" title="Ubah" onclick=\'formLegalitas(' + JSON.stringify(l) + ')\'><i class="bi bi-pencil"></i></button>' +
             '<button class="action-icon-btn danger" title="Hapus" onclick="hapusLegalitas(\'' + esc(l.ID) + '\')"><i class="bi bi-trash"></i></button>' +
           '</td></tr>';
@@ -360,4 +363,64 @@ function ambilJenisLegalitas() {
   if (pilih.value !== 'Lainnya') return pilih.value;
   const kolom = document.getElementById('legalJenisLain');
   return kolom ? kolom.value.trim() : '';
+}
+
+
+// ════════════════════════════════════════════════════════
+// PENGINGAT LEGALITAS LEWAT WHATSAPP
+// ════════════════════════════════════════════════════════
+// Tombol hanya muncul pada legalitas yang berstatus "Perlu Diperbarui"
+// atau "Kadaluarsa" — yang sudah aktif tidak perlu diingatkan.
+
+/** Rapikan nomor HP jadi format internasional yang diterima WhatsApp. */
+function rapikanNomorWA(no) {
+  let n = String(no || '').replace(/[^0-9]/g, '');
+  if (!n) return '';
+  if (n.indexOf('0') === 0) n = '62' + n.substring(1);      // 08xx → 628xx
+  else if (n.indexOf('62') !== 0) n = '62' + n;             // 8xx  → 628xx
+  return n;
+}
+
+function kirimPengingatWA(idLegalitas) {
+  const l = (AppState.cache.legalitas || []).find(function (x) { return String(x.ID) === String(idLegalitas); });
+  if (!l) { showToast('Gagal', 'Data legalitas tidak ditemukan.', 'danger'); return; }
+
+  const umkm = (AppState.cache.umkm || []).find(function (u) { return u.KodeUnik === l.IDUMKM; });
+  const nomor = rapikanNomorWA(umkm ? umkm.NoHP : '');
+
+  if (!nomor) {
+    showConfirm(
+      'Nomor HP <b>' + esc(l.NamaUMKM) + '</b> belum terdaftar, jadi pesan tidak dapat dikirim.<br><br>' +
+      'Isi dulu lewat <b>Data Master UMKM → Ubah → Nomor HP / WhatsApp</b>.',
+      function () { closeModal('modalConfirm'); navigateTo('masterUmkm'); },
+      'Buka Data Master');
+    return;
+  }
+
+  const kadaluarsa = l.IsSeumurHidup ? '-' : formatTgl(l.TanggalKadaluarsa);
+  const namaApp = AppState.config.namaAplikasi || 'PPU UT Cakung';
+
+  let isi;
+  if (l.Status === 'Kadaluarsa') {
+    isi = 'Assalamualaikum / Selamat pagi Bapak/Ibu *' + l.NamaUMKM + '*,\n\n' +
+      'Kami dari ' + namaApp + ' ingin menginformasikan bahwa legalitas usaha berikut *sudah kadaluarsa*:\n\n' +
+      '📄 Jenis  : ' + l.JenisLegalitas + '\n' +
+      (l.NomorLegalitas ? '🔢 Nomor  : ' + l.NomorLegalitas + '\n' : '') +
+      '📅 Berlaku sampai : ' + kadaluarsa + '\n\n' +
+      'Mohon segera diproses perpanjangannya agar kegiatan usaha tetap berjalan lancar. ' +
+      'Bila memerlukan pendampingan, silakan hubungi kami.\n\nTerima kasih.';
+  } else {
+    const sisa = (l.SisaHari !== null && l.SisaHari !== undefined) ? l.SisaHari : null;
+    isi = 'Assalamualaikum / Selamat pagi Bapak/Ibu *' + l.NamaUMKM + '*,\n\n' +
+      'Kami dari ' + namaApp + ' ingin mengingatkan bahwa legalitas usaha berikut *akan segera berakhir*:\n\n' +
+      '📄 Jenis  : ' + l.JenisLegalitas + '\n' +
+      (l.NomorLegalitas ? '🔢 Nomor  : ' + l.NomorLegalitas + '\n' : '') +
+      '📅 Berlaku sampai : ' + kadaluarsa +
+      (sisa !== null ? ' (± ' + sisa + ' hari lagi)' : '') + '\n\n' +
+      'Mohon dipersiapkan perpanjangannya sebelum masa berlaku habis. ' +
+      'Bila memerlukan pendampingan, silakan hubungi kami.\n\nTerima kasih.';
+  }
+
+  window.open('https://wa.me/' + nomor + '?text=' + encodeURIComponent(isi), '_blank');
+  showToast('WhatsApp Dibuka', 'Pesan sudah disiapkan — tinggal ditekan kirim.', 'info');
 }

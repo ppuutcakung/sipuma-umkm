@@ -472,24 +472,47 @@ async function inisialisasiSipuma() {
     return;
   }
 
-  // Coba pulihkan sesi sebelumnya
-  const sesiTersimpan = ambilSesiLokal();
-  if (sesiTersimpan) {
-    if (teksMuat) teksMuat.textContent = 'Memeriksa sesi Anda...';
-    AppState.session = sesiTersimpan;
-    const res = await panggilAPI('cekSesi', [], { percobaan: 2 });
-    if (res.success) {
-      const cfg = await panggilAPI('getAllConfig', [], { percobaan: 2 });
-      if (cfg.success) AppState.config = cfg.data || {};
-      masukKeAplikasi();
-      return;
-    }
-    // Sesi tidak sah — tanganiSesiHabis() sudah dipanggil di dalam panggilAPI
-    AppState.session = null;
-    hapusSesiLokal();
+  // Nyalakan Firebase sebelum apa pun yang menyentuh data
+  if (!mulaiFirebase()) {
+    if (teksMuat) teksMuat.innerHTML =
+      '<b style="color:#DC2626;">Gagal memuat Firebase.</b><br>' +
+      '<span style="font-size:12px;">Periksa koneksi internet, lalu muat ulang halaman.</span>';
+    return;
   }
 
-  tampilkanHalamanLogin();
+  // Pemulihan sesi diserahkan ke Firebase Auth: ia menyimpan sesinya
+  // sendiri di perangkat dan memperbarui token secara berkala, sehingga
+  // pengguna tidak perlu login ulang tiap kali menutup tab.
+  if (teksMuat) teksMuat.textContent = 'Memeriksa sesi Anda...';
+
+  await new Promise(function (selesai) {
+    const berhenti = fbAuth.onAuthStateChanged(async function (user) {
+      berhenti();
+      if (!user) { tampilkanHalamanLogin(); return selesai(); }
+      try {
+        const k = await klaimPengguna();
+        const tersimpan = ambilSesiLokal() || {};
+        AppState.session = {
+          username: k.username,
+          role: roleKeLama(k.role),   // untuk menu & halaman
+          roleFS: k.role,             // untuk Firestore
+          cabang: k.cabang, idUmkm: k.idUmkm,
+          fotoURL: tersimpan.fotoURL || '', alamat: tersimpan.alamat || ''
+        };
+        AppState.cabangDipilih = null;
+        simpanSesiLokal(AppState.session);
+        const cfg = await panggilAPI('getAllConfig', []);
+        AppState.config = cfg.success ? (cfg.data || {}) : {};
+        masukKeAplikasi();
+      } catch (e) {
+        console.error('Pemulihan sesi gagal:', e);
+        await keluarFirebase();
+        hapusSesiLokal();
+        tampilkanHalamanLogin();
+      }
+      selesai();
+    });
+  });
 }
 
 // Jalankan segera bila dokumen sudah siap; kalau belum, tunggu event.

@@ -37,12 +37,20 @@ function pilihRoleLogin(role) {
     t.classList.toggle('active', t.dataset.role === role);
   });
   const t = TEKS_ROLE[role];
-  document.getElementById('lblUsername').textContent = t.labelUser;
-  document.getElementById('loginUsername').placeholder = t.placeholderUser;
-  document.getElementById('hintUsername').textContent = t.hintUser;
-  document.getElementById('lblPassword').textContent = t.labelPass;
-  document.getElementById('formatHint').textContent = t.formatHint;
-  document.getElementById('loginBtnText').textContent = t.tombol;
+  // Setiap elemen dicek dulu. Sebelumnya, satu elemen yang tidak ditemukan
+  // membuat seluruh fungsi berhenti di tengah jalan — akibatnya tab peran
+  // tampak tidak berfungsi sama sekali, padahal masalahnya hanya satu baris.
+  function isi(id, sifat, nilai) {
+    const el = document.getElementById(id);
+    if (!el) { console.warn('SIPUMA: elemen "' + id + '" tidak ditemukan di halaman.'); return; }
+    el[sifat] = nilai;
+  }
+  isi('lblUsername', 'textContent', t.labelUser);
+  isi('loginUsername', 'placeholder', t.placeholderUser);
+  isi('hintUsername', 'textContent', t.hintUser);
+  isi('lblPassword', 'textContent', t.labelPass);
+  isi('formatHint', 'textContent', t.formatHint);
+  isi('loginBtnText', 'textContent', t.tombol);
   sembunyikanGalatLogin();
 }
 
@@ -81,27 +89,48 @@ async function handleLogin(e) {
 
   // Login memakai bentuk payload khusus (role/username/password di tingkat
   // atas, bukan di dalam args) — karena itu tidak lewat panggilAPI biasa.
+  //
+  // Alurnya: GAS memverifikasi password, lalu menerbitkan Custom Token.
+  // Token itu dipakai masuk ke Firebase — sejak saat itu seluruh operasi
+  // data ditegakkan Firestore Security Rules, bukan lagi kode kita.
   const hasil = await kirimLogin(roleLoginTerpilih, username, password);
 
-  resetBtn(btn);
-
   if (!hasil.success) {
+    resetBtn(btn);
     tampilkanGalatLogin(hasil.message || 'Login gagal.');
     return;
   }
 
-  // Simpan sesi
+  try {
+    setBtnLoading(btn, 'Menghubungkan...');
+    await masukFirebaseDenganToken(hasil.data.customToken);
+  } catch (e) {
+    resetBtn(btn);
+    console.error('Gagal masuk Firebase:', e);
+    tampilkanGalatLogin('Verifikasi berhasil, tetapi gagal menghubungkan ke basis data. Coba lagi.');
+    return;
+  }
+  resetBtn(btn);
+
+  const p = hasil.data.profil;
   AppState.session = {
-    token: hasil.data.token,
-    berlakuSampai: hasil.data.berlakuSampai,
-    username: hasil.data.profil.username,
-    role: hasil.data.profil.role,
-    idUmkm: hasil.data.profil.idUmkm,
-    fotoURL: hasil.data.profil.fotoURL,
-    alamat: hasil.data.profil.alamat
+    username: p.username,
+    // Firestore memakai penamaan baru (admin/stakeholder/umkm), sedangkan
+    // seluruh kode halaman sudah memakai Admin/UT/UMKM sejak awal.
+    // Disimpan KEDUANYA: `role` untuk tampilan, `roleFS` untuk Firestore.
+    role: roleKeLama(p.role),
+    roleFS: p.role,
+    cabang: p.cabang, idUmkm: p.idUmkm, fotoURL: p.fotoURL, alamat: p.alamat,
+    // Dipakai untuk permintaan yang tetap harus lewat GAS: unggah berkas
+    // ke Drive dan penulisan koleksi `kredensial` yang tertutup bagi browser.
+    tokenGas: hasil.data.tokenGas || ''
   };
-  AppState.config = hasil.data.config || {};
+  AppState.cabangDipilih = null;
   simpanSesiLokal(AppState.session);
+
+  // Konfigurasi diambil dari Firestore sesuai cabang
+  const cfg = await panggilAPI('getAllConfig', []);
+  AppState.config = cfg.success ? (cfg.data || {}) : {};
 
   document.getElementById('loginPassword').value = '';
   masukKeAplikasi();
@@ -117,7 +146,7 @@ async function kirimLogin(role, username, password) {
     const res = await fetch(GAS_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'login', role: role, username: username, password: password }),
+      body: JSON.stringify({ action: 'loginFirebase', role: role, username: username, password: password }),
       redirect: 'follow'
     });
     if (!res.ok) throw new Error('Server membalas status ' + res.status);
@@ -133,7 +162,7 @@ function handleLogout() {
     closeModal('modalConfirm');
     // Beri tahu server agar token benar-benar dimatikan (bukan cuma dihapus
     // dari browser) — inilah bedanya dengan logout versi lama.
-    try { await panggilAPI('logout', [], { percobaan: 1 }); } catch (e) {}
+    try { await keluarFirebase(); } catch (e) {}
     hapusSesiLokal();
     resetCache();
     AppState.session = null;
@@ -157,4 +186,10 @@ function masukKeAplikasi() {
   terapkanIdentitasAplikasi();   // judul, tagline, logo, footer, warna
   mulaiPantauServer();           // indikator sambungan server
   navigateTo('dashboard');
+}
+
+
+/** Peran Firestore → penamaan lama yang dipakai menu & halaman. */
+function roleKeLama(r) {
+  return { admin: 'Admin', superadmin: 'Admin', stakeholder: 'UT', umkm: 'UMKM' }[r] || r;
 }

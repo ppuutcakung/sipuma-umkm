@@ -182,6 +182,11 @@
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
 
+  <!-- Firebase SDK (versi compat: bisa dipakai tanpa alat bangun/bundler) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
   <!-- ⚠️ Urutan pemuatan WAJIB seperti ini:
        config → api → ui → compat → auth → dashboard → halaman → app
        compat.js harus SEBELUM halaman.js (menyediakan jembatan API),
@@ -189,6 +194,11 @@
   <script src="js/config.js"></script>
   <script src="js/api.js"></script>
   <script src="js/ui.js"></script>
+  <!-- firebase-init & firestore-api WAJIB sebelum compat.js:
+       firestore-api mengganti panggilAPI, dan compat.js membangun
+       jembatan lama di atasnya. -->
+  <script src="js/firebase-init.js"></script>
+  <script src="js/firestore-api.js"></script>
   <script src="js/compat.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/dashboard.js"></script>

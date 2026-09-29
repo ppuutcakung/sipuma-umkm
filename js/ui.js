@@ -43,14 +43,22 @@ function showConfirm(pesan, onYa, labelTombol) {
 // ── Tombol dengan status memuat ──
 function setBtnLoading(btn, teks) {
   if (!btn) return;
-  btn.dataset.htmlAsli = btn.innerHTML;
+  // Simpan tampilan asli HANYA sekali. Bila fungsi ini dipanggil dua kali
+  // berturut-turut (misal "Memverifikasi..." lalu "Menghubungkan..."),
+  // panggilan kedua akan menyimpan spinner sebagai "tampilan asli" —
+  // akibatnya resetBtn() justru mengembalikan spinner, dan tombol tampak
+  // berputar selamanya.
+  if (!btn.dataset.htmlAsli) btn.dataset.htmlAsli = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner spinner-sm"></span> ' + (teks || 'Menyimpan...');
 }
 function resetBtn(btn) {
   if (!btn) return;
   btn.disabled = false;
-  if (btn.dataset.htmlAsli) btn.innerHTML = btn.dataset.htmlAsli;
+  if (btn.dataset.htmlAsli) {
+    btn.innerHTML = btn.dataset.htmlAsli;
+    delete btn.dataset.htmlAsli;   // bersihkan agar siap dipakai lagi
+  }
 }
 
 // ── Pengaman teks & format ──
