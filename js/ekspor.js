@@ -41,8 +41,12 @@ function bangunTabelEkspor(judul, kolom, baris, lebar, subJudul) {
   // ── Kepala dokumen: tiga baris, semuanya di tengah ──
   html += '<tr><td colspan="' + jml + '" style="text-align:center;font-size:15pt;font-weight:bold;border:none;padding:10px 6px 2px;">' +
     escEks(judul) + '</td></tr>';
+  // Nama organisasi mengikuti CABANG yang sedang dilihat, bukan ditulis
+  // tetap di dalam kode. Sebelumnya selalu "PPU UT Cakung" — keliru
+  // begitu ada cabang kedua, karena berkasnya jadi salah identitas.
+  const organisasi = (typeof namaOrganisasi === 'function') ? namaOrganisasi() : 'PPU UT Cakung';
   html += '<tr><td colspan="' + jml + '" style="text-align:center;font-size:12pt;font-weight:bold;border:none;padding:2px 6px;">' +
-    'PPU UT Cakung</td></tr>';
+    escEks(organisasi) + '</td></tr>';
   html += '<tr><td colspan="' + jml + '" style="text-align:center;font-size:10pt;border:none;padding:2px 6px 10px;">' +
     'Periode Download: ' + escEks(waktuUnduhSekarang()) + '</td></tr>';
   if (subJudul) {

@@ -8,7 +8,7 @@
 //
 // Kalau baris ini masih berisi 'GANTI_DENGAN_URL_EXEC_ANDA', aplikasi akan
 // menampilkan peringatan dan tidak akan mencoba menghubungi server.
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbw96R4kj6zWvXG74W7S50gNWdWSs9u-gMVKslPXn7rIxmaPm4JlT5ccRAARtTEeojQjpg/exec';
+const GAS_URL = 'GANTI_DENGAN_URL_EXEC_ANDA';
 
 // ── Konstanta aplikasi (disamakan dengan backend) ──
 const SEKTOR_LIST = ['Kuliner', 'Kerajinan', 'Pertanian', 'Manufaktur'];
@@ -37,6 +37,8 @@ const AppState = {
   session: null,        // { token, username, role, idUmkm, fotoURL, alamat }
   config: {},           // konfigurasi dari server (tahunAktif, target, dll)
   currentSection: null,
+  cabangDipilih: null,      // cabang yang sedang dilihat (peran lintas cabang)
+  daftarCabang: [],         // daftar cabang untuk pemilih di topbar
   cache: {
     umkm: null,
     users: null,

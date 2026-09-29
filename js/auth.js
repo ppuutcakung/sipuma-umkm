@@ -125,7 +125,16 @@ async function handleLogin(e) {
     // ke Drive dan penulisan koleksi `kredensial` yang tertutup bagi browser.
     tokenGas: hasil.data.tokenGas || ''
   };
-  AppState.cabangDipilih = null;
+  // Stakeholder & superadmin melihat lintas cabang. Tetapi menampilkan
+  // data GABUNGAN justru membingungkan — angka dashboard jadi campuran
+  // dua cabang tanpa penjelasan. Karena itu selalu dimulai dari SATU
+  // cabang, lalu pengguna berpindah lewat pemilih di kanan atas.
+  if (p.role === 'stakeholder' || p.role === 'superadmin') {
+    await muatDaftarCabang();
+    AppState.cabangDipilih = (AppState.daftarCabang[0] || {}).kode || 'CAKUNG';
+  } else {
+    AppState.cabangDipilih = null;
+  }
   simpanSesiLokal(AppState.session);
 
   // Konfigurasi diambil dari Firestore sesuai cabang

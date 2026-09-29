@@ -32,12 +32,16 @@ function renderShellPeran() {
   document.getElementById('ctxChip').innerHTML = '<i class="bi bi-building"></i> ' +
     (s.role === 'UMKM' ? esc(s.username)
       : s.role === 'UT' ? 'UMKM Binaan'                      // akun lintas lembaga — sengaja umum
-      : 'UMKM Binaan PPU/LPB');                              // Admin/PIC
+      : 'UMKM Binaan ' + esc((typeof infoCabangAktif === 'function'
+            ? (infoCabangAktif().nama || 'PPU/LPB') : 'PPU/LPB')));
   document.getElementById('ctxSub').textContent = {
     Admin: 'Panel Administrasi & Pengelolaan Data',
     UT: 'Panel Pemantauan Program',
     UMKM: 'Panel Pelaporan Usaha'
   }[s.role] || '';
+
+  // Pemilih cabang hanya muncul untuk peran lintas cabang
+  if (typeof renderPemilihCabang === 'function') renderPemilihCabang();
 
   document.getElementById('sidebarStatus').innerHTML =
     '<span><span class="dot dot-pramandiri"></span> Sesi Aktif</span>' +
@@ -185,8 +189,12 @@ function panelPengaturanAplikasi() {
       '<div class="form-group"><label class="form-label">Nama / Judul Aplikasi</label>' +
         '<input class="form-control" id="cfgJudul" value="' + esc(c.namaAplikasi || 'SIPUMA') + '" placeholder="Contoh: SIPUMA"></div>' +
       '<div class="form-group"><label class="form-label">Tagline</label>' +
-        '<input class="form-control" id="cfgTagline" value="' + esc(c.taglineAplikasi || 'by PPU UT Cakung') + '" placeholder="Contoh: by PPU UT Cakung"></div>' +
+        '<input class="form-control" id="cfgTagline" value="' + esc(c.taglineAplikasi || '') + '" placeholder="Contoh: by PPU UT Cakung"></div>' +
     '</div>' +
+    '<div class="form-group"><label class="form-label">Nama Organisasi (untuk berkas ekspor)</label>' +
+      '<input class="form-control" id="cfgOrganisasi" value="' + esc(c.namaOrganisasi || '') + '" placeholder="Contoh: LPB UT Tanjung">' +
+      '<div class="login-hint">Tercetak di baris kedua pada berkas Excel &amp; PDF. ' +
+        'Berlaku untuk cabang ini saja. Bila dikosongkan, dipakai nama cabang dari sistem.</div></div>' +
     '<div class="form-group"><label class="form-label">Teks Footer</label>' +
       '<input class="form-control" id="cfgFooter" value="' + esc(c.teksFooter || 'Cakung, Kota Jakarta Timur, DKI Jakarta - Binaan PPU UT Cakung') + '"></div>' +
     '<div class="grid grid-2">' +
@@ -274,6 +282,7 @@ async function simpanPengaturanAplikasi() {
   const judul   = document.getElementById('cfgJudul').value.trim();
   const tagline = document.getElementById('cfgTagline').value.trim();
   const footer  = document.getElementById('cfgFooter').value.trim();
+  const organisasi = document.getElementById('cfgOrganisasi').value.trim();
   const warna   = document.getElementById('cfgWarnaTeks').value.trim() || document.getElementById('cfgWarna').value;
   const fileLogo = document.getElementById('cfgLogoFile').files[0];
 
@@ -307,6 +316,7 @@ async function simpanPengaturanAplikasi() {
       panggilAPI('setConfig', ['namaAplikasi', judul]),
       panggilAPI('setConfig', ['taglineAplikasi', tagline]),
       panggilAPI('setConfig', ['teksFooter', footer]),
+      panggilAPI('setConfig', ['namaOrganisasi', organisasi]),
       panggilAPI('setConfig', ['warnaUtama', warna])
     ]);
     resetBtn(btn);
@@ -315,6 +325,7 @@ async function simpanPengaturanAplikasi() {
       AppState.config.namaAplikasi = judul;
       AppState.config.taglineAplikasi = tagline;
       AppState.config.teksFooter = footer;
+      AppState.config.namaOrganisasi = organisasi;
       AppState.config.warnaUtama = warna;
       terapkanIdentitasAplikasi();
       showToast('Berhasil', 'Identitas aplikasi berhasil diperbarui.', 'success');
@@ -333,6 +344,7 @@ function resetIdentitasAplikasi() {
     document.getElementById('cfgJudul').value = 'SIPUMA';
     document.getElementById('cfgTagline').value = 'by PPU UT Cakung';
     document.getElementById('cfgFooter').value = 'Cakung, Kota Jakarta Timur, DKI Jakarta - Binaan PPU UT Cakung';
+    document.getElementById('cfgOrganisasi').value = '';
     document.getElementById('cfgWarna').value = '#0284C7';
     document.getElementById('cfgWarnaTeks').value = '#0284C7';
     showToast('Siap', 'Nilai bawaan sudah diisi. Klik Simpan untuk menerapkannya.', 'info');
@@ -499,7 +511,12 @@ async function inisialisasiSipuma() {
           cabang: k.cabang, idUmkm: k.idUmkm,
           fotoURL: tersimpan.fotoURL || '', alamat: tersimpan.alamat || ''
         };
-        AppState.cabangDipilih = null;
+        if (k.role === 'stakeholder' || k.role === 'superadmin') {
+          await muatDaftarCabang();
+          AppState.cabangDipilih = (AppState.daftarCabang[0] || {}).kode || 'CAKUNG';
+        } else {
+          AppState.cabangDipilih = null;
+        }
         simpanSesiLokal(AppState.session);
         const cfg = await panggilAPI('getAllConfig', []);
         AppState.config = cfg.success ? (cfg.data || {}) : {};

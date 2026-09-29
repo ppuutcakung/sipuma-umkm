@@ -125,3 +125,83 @@ async function cekKlaimSaya() {
   }
   return ringkas;
 }
+
+
+// ════════════════════════════════════════════════════════
+// PEMILIH CABANG (Stakeholder & Superadmin)
+// ════════════════════════════════════════════════════════
+
+/** Ambil daftar cabang aktif, disimpan di AppState untuk pemilih. */
+async function muatDaftarCabang() {
+  try {
+    const snap = await db.collection('cabang').get();
+    AppState.daftarCabang = snap.docs
+      .map(function (d) { const o = d.data() || {}; o.kode = o.kode || d.id; return o; })
+      .filter(function (c) { return c.aktif !== false; })
+      .sort(function (a, b) { return String(a.kode).localeCompare(String(b.kode)); });
+  } catch (e) {
+    console.warn('SIPUMA: daftar cabang tidak terbaca —', e.code || e.message);
+    AppState.daftarCabang = [{ kode: 'CAKUNG', nama: 'PPU UT Cakung' }];
+  }
+  return AppState.daftarCabang;
+}
+
+/** Keterangan cabang yang sedang dilihat (dipakai ekspor & tampilan). */
+function infoCabangAktif() {
+  const kode = cabangAktif();
+  const c = (AppState.daftarCabang || []).find(function (x) { return x.kode === kode; });
+  return c || { kode: kode, nama: kode };
+}
+
+/** Nama organisasi untuk kepala berkas ekspor. */
+function namaOrganisasi() {
+  // Diutamakan dari pengaturan per cabang, lalu nama cabang, baru kodenya.
+  // Sebelumnya tertulis tetap "PPU UT Cakung" di dalam kode — keliru
+  // begitu ada cabang kedua, karena setiap cabang punya nama sendiri.
+  const cfg = AppState.config || {};
+  if (cfg.namaOrganisasi) return cfg.namaOrganisasi;
+  const info = infoCabangAktif();
+  return info.nama || info.kode;
+}
+
+/** Pemilih cabang di topbar — hanya untuk peran lintas cabang. */
+function renderPemilihCabang() {
+  const wadah = document.getElementById('pemilihCabang');
+  if (!wadah) return;
+  if (!bolehLintasCabang()) { wadah.innerHTML = ''; return; }
+
+  const daftar = AppState.daftarCabang || [];
+  const aktif = cabangAktif();
+  wadah.innerHTML =
+    '<i class="bi bi-diagram-3" style="color:var(--text-muted);"></i>' +
+    '<select class="form-select" id="pilihCabangTopbar" style="width:auto;height:32px;font-size:12.5px;" ' +
+    'onchange="gantiCabang(this.value)" title="Cabang yang sedang dilihat">' +
+      daftar.map(function (c) {
+        return '<option value="' + c.kode + '"' + (c.kode === aktif ? ' selected' : '') + '>' +
+          (c.nama || c.kode) + '</option>';
+      }).join('') +
+    '</select>';
+}
+
+/** Berpindah cabang: bersihkan seluruh cache lalu muat ulang halaman aktif. */
+async function gantiCabang(kode) {
+  if (!kode || kode === AppState.cabangDipilih) return;
+  AppState.cabangDipilih = kode;
+
+  // Seluruh cache WAJIB dikosongkan — isinya milik cabang sebelumnya.
+  // Tanpa ini, data cabang lama akan tetap tampil sampai cache kedaluwarsa.
+  if (typeof hapusCacheFS === 'function') hapusCacheFS(null);
+  resetCache();
+
+  // Konfigurasi juga per cabang (periode aktif, target, nama organisasi)
+  const cfg = await panggilAPI('getAllConfig', []);
+  AppState.config = cfg.success ? (cfg.data || {}) : {};
+
+  simpanSesiLokal(AppState.session);
+  renderShellPeran();
+  terapkanIdentitasAplikasi();
+  navigateTo(AppState.currentSection || 'dashboard');
+
+  const info = infoCabangAktif();
+  showToast('Cabang Berpindah', 'Menampilkan data ' + (info.nama || kode) + '.', 'info');
+}
