@@ -782,18 +782,44 @@ function cariUMKMSerupaFS(namaBaru, daftar, kecuali) {
   return null;
 }
 
-/** Kode unik baru: 3 huruf sektor + 4 angka urut. */
+// Singkatan cabang untuk awalan kode unik.
+const SINGKATAN_CABANG = { 'CAKUNG': 'CKG', 'TANJUNG': 'TJG' };
+
+function singkatanCabang(kode) {
+  return SINGKATAN_CABANG[kode] || String(kode || 'XXX').substring(0, 3).toUpperCase();
+}
+
+/**
+ * Buat kode unik UMKM baru.
+ *
+ * PENTING — kode WAJIB menyertakan awalan cabang.
+ * Kode ini dipakai sebagai ID dokumen, sementara penomorannya dihitung
+ * dari UMKM di cabang sendiri saja (Admin memang tidak boleh melihat
+ * cabang lain). Tanpa awalan cabang, UMKM pertama di cabang kedua akan
+ * mendapat kode yang sama dengan UMKM pertama di cabang pertama — dan
+ * karena ID-nya sama, datanya akan saling menimpa.
+ *
+ * Format baru : CKG-KUL0001
+ * Format lama : KUL0001  (data Cakung sebelum multi-cabang — tetap sah
+ *               dan tidak diubah, hanya tidak dipakai lagi untuk yang baru)
+ */
 function buatKodeUnikFS(sektor, daftarUmkm) {
   const awalan = { 'Kuliner': 'KUL', 'Kerajinan': 'KRJ', 'Pertanian': 'PTN', 'Manufaktur': 'MFG' }[sektor] || 'UMK';
+  const cab = singkatanCabang(cabangAktif());
+
+  // Cocokkan kedua format saat mencari nomor tertinggi, supaya penomoran
+  // tetap berlanjut dan tidak mengulang dari 1.
+  const pola = new RegExp(awalan + '(\\d{4})$');
   let maks = 0;
   daftarUmkm.forEach(function (u) {
     const k = String(u.kodeUnik || u._id || '');
-    if (k.indexOf(awalan) === 0) {
-      const n = parseInt(k.substring(3), 10);
+    const m = k.match(pola);
+    if (m) {
+      const n = parseInt(m[1], 10);
       if (!isNaN(n) && n > maks) maks = n;
     }
   });
-  return awalan + String(maks + 1).padStart(4, '0');
+  return cab + '-' + awalan + String(maks + 1).padStart(4, '0');
 }
 
 // ════════════════════════════════════════════════════════
