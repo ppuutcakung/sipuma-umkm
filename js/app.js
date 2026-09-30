@@ -216,6 +216,33 @@ function panelPengaturanAplikasi() {
   '</div>' +
 
   '<div class="panel mt-4">' +
+    '<div class="panel-title">Akses Laporan untuk Stakeholder</div>' +
+    '<div class="panel-sub">Mengatur apakah Stakeholder boleh melihat Laporan CSR cabang ini.</div>' +
+    '<div class="d-flex flex-between align-center mt-3" style="flex-wrap:wrap;gap:12px;' +
+      'padding:12px 14px;border-radius:10px;background:' +
+      (c.laporanTerbukaUntukStakeholder ? 'var(--pramandiri-bg)' : 'var(--pemula-bg)') + ';">' +
+      '<div style="font-size:13px;color:' +
+        (c.laporanTerbukaUntukStakeholder ? 'var(--pramandiri-text)' : 'var(--pemula-text)') + ';">' +
+        '<b><i class="bi bi-' + (c.laporanTerbukaUntukStakeholder ? 'unlock-fill' : 'lock-fill') + '"></i> ' +
+        (c.laporanTerbukaUntukStakeholder ? 'Laporan TERBUKA' : 'Laporan DITUTUP') + '</b><br>' +
+        '<span style="font-size:12px;">' +
+        (c.laporanTerbukaUntukStakeholder
+          ? 'Stakeholder dapat melihat dan mengunduh Laporan CSR cabang ini.'
+          : 'Stakeholder tidak dapat melihat Laporan CSR cabang ini.') +
+        '</span></div>' +
+      '<button class="btn ' + (c.laporanTerbukaUntukStakeholder ? 'btn-outline' : 'btn-primary') + '" ' +
+        'id="btnAksesLaporan" onclick="ubahAksesLaporan(' + (!c.laporanTerbukaUntukStakeholder) + ')">' +
+        '<i class="bi bi-' + (c.laporanTerbukaUntukStakeholder ? 'lock' : 'unlock') + '"></i> ' +
+        (c.laporanTerbukaUntukStakeholder ? 'Tutup Akses' : 'Buka Akses') + '</button>' +
+    '</div>' +
+    '<div class="text-muted mt-3" style="font-size:11.5px;background:var(--canvas);padding:9px 12px;border-radius:8px;">' +
+      'Pengaturan ini berlaku untuk <b>cabang ini saja</b> dan ditegakkan di sisi server — ' +
+      'bukan sekadar disembunyikan dari tampilan. Saat ditutup, Stakeholder benar-benar ' +
+      'tidak dapat membaca laporannya dengan cara apa pun.' +
+    '</div>' +
+  '</div>' +
+
+  '<div class="panel mt-4">' +
     '<div class="panel-title">Cadangan Data (Backup)</div>' +
     '<div class="panel-sub">Unduh salinan seluruh data aplikasi tanpa perlu membuka Google Drive.</div>' +
     '<div class="d-flex gap-2 mt-3" style="flex-wrap:wrap;">' +
@@ -597,4 +624,32 @@ function simpanPeriodeAktif() {
         showToast('Error', 'Gagal menerapkan periode.', 'danger');
       });
     }, 'Ya, Terapkan');
+}
+
+
+/** Buka atau tutup akses Laporan CSR bagi Stakeholder — per cabang. */
+function ubahAksesLaporan(jadikanTerbuka) {
+  const pesan = jadikanTerbuka
+    ? 'Buka akses Laporan CSR cabang ini untuk <b>Stakeholder</b>?<br><br>' +
+      'Mereka akan dapat melihat dan mengunduh seluruh laporan cabang ini.'
+    : 'Tutup akses Laporan CSR cabang ini dari <b>Stakeholder</b>?<br><br>' +
+      'Mereka tidak akan bisa melihatnya lagi sampai Anda membukanya kembali. ' +
+      'Data laporannya sendiri <b>tidak dihapus</b>.';
+
+  showConfirm(pesan, async function () {
+    closeModal('modalConfirm');
+    const btn = document.getElementById('btnAksesLaporan');
+    setBtnLoading(btn, 'Menerapkan...');
+    const res = await panggilAPI('setConfig', ['laporanTerbukaUntukStakeholder', !!jadikanTerbuka]);
+    resetBtn(btn);
+    if (res.success) {
+      AppState.config.laporanTerbukaUntukStakeholder = !!jadikanTerbuka;
+      loadPengaturan();
+      showToast('Berhasil',
+        jadikanTerbuka ? 'Laporan kini terbuka untuk Stakeholder.'
+                       : 'Laporan kini ditutup dari Stakeholder.', 'success');
+    } else {
+      showToast('Gagal', res.message || 'Gagal mengubah pengaturan.', 'danger');
+    }
+  }, jadikanTerbuka ? 'Ya, Buka' : 'Ya, Tutup');
 }

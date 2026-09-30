@@ -1510,8 +1510,28 @@ function loadLaporanCsrAdmin() {
     document.getElementById('app-container').innerHTML = `<div class="panel text-center" style="padding:60px 20px;"><i class="bi bi-wifi-off" style="font-size:36px;color:var(--border-strong);"></i><p class="mt-3 text-muted">Gagal memuat laporan CSR.</p><button class="btn btn-primary mt-2" onclick="loadLaporanCsrAdmin()">Coba Lagi</button></div>`;
   });
 }
+/** Pesan yang jelas bila Admin menutup akses laporan. */
+function renderLaporanDitutup() {
+  document.getElementById('app-container').innerHTML =
+    pageHeader('Arsip Resmi', 'File Laporan', 'PPU',
+      'Laporan bulanan resmi program.', '') +
+    '<div class="panel text-center" style="padding:56px 24px;">' +
+      '<i class="bi bi-lock-fill" style="font-size:38px;color:var(--border-strong);"></i>' +
+      '<h5 class="mt-3">Laporan belum dibuka</h5>' +
+      '<p class="text-muted" style="font-size:13px;max-width:460px;margin:8px auto 0;">' +
+        'Admin cabang ini belum membuka akses laporan. Silakan hubungi pengelola ' +
+        'bila Anda memerlukannya.</p>' +
+    '</div>';
+}
+
 function loadLaporanCsrUT() {
   const sec = AppState.currentSection;
+  // Bila Admin menutup akses, server menolak — bedakan dari gangguan
+  // koneksi supaya pesannya tidak menyesatkan.
+  if (AppState.config && AppState.config.laporanTerbukaUntukStakeholder === false) {
+    renderLaporanDitutup();
+    return;
+  }
   if (AppState.cache.laporanCsr) { renderLaporanCsr(AppState.cache.laporanCsr.filter(r => r.Status === 'Final'), false); return; }
   panggilServerAman('getAllLaporanCSR', [], (res) => {
     if (AppState.currentSection !== sec) return;
