@@ -1854,15 +1854,12 @@ function renderUserAksesTabel(halaman) {
   area.innerHTML = `
       <div style="overflow-x:auto;">
       <table class="sipuma-table">
-        <thead><tr><th>Username</th><th>Role</th><th>Status Akses</th><th>Password</th><th>Status Aktif</th><th>Dibuat</th><th>Aksi</th></tr></thead>
+        <thead><tr><th>Username</th><th>Role</th><th>Status Akses</th><th>Status Aktif</th><th>Dibuat</th><th>Aksi</th></tr></thead>
         <tbody>${rowsHalamanIni.length ? rowsHalamanIni.map(u => `
           <tr>
             <td><b>${esc(u.Username)}</b>${u.IDUMKM ? `<div class="text-muted" style="font-size:11px;">${esc(u.IDUMKM)}</div>` : ''}</td>
             <td><span class="sector-tag">${esc(u.Role)}</span></td>
             <td><span class="status-pill ${u.StatusAksesLogin === 'Allowed' ? 'allowed' : 'blocked'}"><span class="dot"></span>${esc(u.StatusAksesLogin)}</span></td>
-              <td>${u.PasswordDiubah
-                ? `<span class="status-pill allowed" style="font-size:10.5px;"><span class="dot"></span>Sudah diganti</span>`
-                : `<span class="status-pill blocked" style="font-size:10.5px;" title="Masih memakai password awal dari Admin"><span class="dot"></span>Password awal</span>`}</td>
             <td>${u.StatusAktif ? 'Aktif' : 'Nonaktif'}</td>
             <td class="text-muted">${formatTgl(u.TanggalDibuat)}</td>
             <td>
@@ -1870,7 +1867,7 @@ function renderUserAksesTabel(halaman) {
               <button class="action-icon-btn ${u.StatusAksesLogin === 'Allowed' ? 'danger' : ''}" title="${u.StatusAksesLogin === 'Allowed' ? 'Blokir' : 'Buka Akses'}" onclick="toggleAkses('${esc(u.Username)}','${u.StatusAksesLogin}')"><i class="bi bi-${u.StatusAksesLogin === 'Allowed' ? 'lock' : 'unlock'}"></i></button>
               ${(u.Role !== 'Admin' && u.Role !== 'UT') ? `<button class="action-icon-btn danger" title="Hapus" onclick="hapusUser('${esc(u.Username)}')"><i class="bi bi-trash"></i></button>` : `<span class="text-muted" style="font-size:10.5px;" title="Akun sistem tidak dapat dihapus"><i class="bi bi-shield-lock"></i></span>`}
             </td>
-          </tr>`).join('') : `<tr><td colspan="7"><div class="table-empty"><i class="bi bi-inbox"></i>${kataKunci ? 'Tidak ada user yang cocok.' : 'Belum ada data user.'}</div></td></tr>`}
+          </tr>`).join('') : `<tr><td colspan="6"><div class="table-empty"><i class="bi bi-inbox"></i>${kataKunci ? 'Tidak ada user yang cocok.' : 'Belum ada data user.'}</div></td></tr>`}
         </tbody>
       </table>
       </div>

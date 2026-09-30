@@ -178,7 +178,11 @@ async function loadPengaturan() {
         '<button class="btn btn-primary btn-block" id="btnSimpanAkun" onclick="simpanPengaturanAkun()"><i class="bi bi-save"></i> Simpan Perubahan</button>' +
       '</div>' +
     '</div>' +
-    panelGantiPassword() +
+    // Ganti password sendiri sengaja HANYA untuk Admin.
+    // Untuk UMKM & Stakeholder, pengelolaan password sepenuhnya lewat
+    // Admin (Manajemen User → Reset Password) — lebih sederhana, dan
+    // tidak ada yang bisa terkunci karena lupa password buatannya sendiri.
+    (s.role === 'Admin' ? panelGantiPassword() : '') +
     (s.role === 'Admin' ? panelPengaturanAplikasi() : '');
 }
 
