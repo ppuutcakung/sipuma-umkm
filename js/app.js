@@ -178,60 +178,15 @@ async function loadPengaturan() {
         '<button class="btn btn-primary btn-block" id="btnSimpanAkun" onclick="simpanPengaturanAkun()"><i class="bi bi-save"></i> Simpan Perubahan</button>' +
       '</div>' +
     '</div>' +
-    // Ganti password sendiri sengaja HANYA untuk Admin.
-    // Untuk UMKM & Stakeholder, pengelolaan password sepenuhnya lewat
-    // Admin (Manajemen User → Reset Password) — lebih sederhana, dan
-    // tidak ada yang bisa terkunci karena lupa password buatannya sendiri.
-    (s.role === 'Admin' ? panelGantiPassword() : '') +
+    // Panel ganti password sengaja TIDAK ADA di sini — untuk semua peran.
+    // Seluruh pengelolaan password terpusat di Manajemen User → Edit →
+    // Reset Password, termasuk untuk Admin sendiri (akunnya ikut muncul
+    // di daftar itu). Satu jalur saja: lebih sederhana dan tidak ada
+    // yang bisa terkunci karena lupa password buatannya sendiri.
     (s.role === 'Admin' ? panelPengaturanAplikasi() : '');
 }
 
-/** Panel ganti password — tersedia untuk semua peran. */
-function panelGantiPassword() {
-  return '<div class="panel mt-4">' +
-    '<div class="panel-title">Ganti Password</div>' +
-    '<div class="panel-sub">Password disimpan dalam bentuk terenkripsi dan tidak dapat dibaca siapa pun — termasuk Admin. Catat baik-baik password baru Anda.</div>' +
-    '<div class="grid grid-3 mt-3">' +
-      '<div class="form-group"><label class="form-label">Password Saat Ini</label>' +
-        '<input type="password" class="form-control" id="gpLama" autocomplete="current-password"></div>' +
-      '<div class="form-group"><label class="form-label">Password Baru</label>' +
-        '<input type="password" class="form-control" id="gpBaru" placeholder="Minimal 6 karakter" autocomplete="new-password"></div>' +
-      '<div class="form-group"><label class="form-label">Ulangi Password Baru</label>' +
-        '<input type="password" class="form-control" id="gpUlang" autocomplete="new-password"></div>' +
-    '</div>' +
-    '<button class="btn btn-primary" id="btnGantiPassword" onclick="gantiPasswordSaya()">' +
-      '<i class="bi bi-key"></i> Ganti Password</button>' +
-    '<div class="text-muted mt-3" style="font-size:11.5px;background:var(--canvas);padding:9px 12px;border-radius:8px;">' +
-      'Bila suatu saat Anda lupa password, hubungi Admin untuk dibuatkan yang baru. ' +
-      'Admin tidak dapat melihat password Anda, hanya menggantinya.' +
-    '</div>' +
-  '</div>';
-}
 
-async function gantiPasswordSaya() {
-  const btn = document.getElementById('btnGantiPassword');
-  const lama = document.getElementById('gpLama').value;
-  const baru = document.getElementById('gpBaru').value;
-  const ulang = document.getElementById('gpUlang').value;
-
-  if (!lama || !baru) { showToast('Peringatan', 'Lengkapi seluruh kolom.', 'warning'); return; }
-  if (baru.length < 6) { showToast('Peringatan', 'Password baru minimal 6 karakter.', 'warning'); return; }
-  if (baru !== ulang) { showToast('Peringatan', 'Ulangan password tidak sama.', 'warning'); return; }
-
-  setBtnLoading(btn, 'Mengganti...');
-  const res = await panggilAPI('gantiPasswordSendiri', [lama, baru]);
-  resetBtn(btn);
-
-  if (res.success) {
-    document.getElementById('gpLama').value = '';
-    document.getElementById('gpBaru').value = '';
-    document.getElementById('gpUlang').value = '';
-    AppState.session.passwordDiubah = true;
-    showToast('Berhasil', res.message, 'success');
-  } else {
-    showToast('Gagal', res.message || 'Gagal mengganti password.', 'danger');
-  }
-}
 
 /** Panel identitas aplikasi — hanya Admin yang boleh mengubah. */
 function panelPengaturanAplikasi() {
