@@ -236,6 +236,8 @@ function renderDashboardUMKM(d) {
       'Pantau realisasi omset, penyerapan tenaga kerja, status legalitas, dan kelas kemandirian usaha Anda.',
       filterTahunDashboard(d)) +
 
+    spandukGantiPassword() +
+
     // ── Baris 1: tiga widget ringkas & sejajar ──
     '<div class="grid grid-3 mb-4">' +
       widgetKemandirianRingkas(d, cls) +
@@ -432,4 +434,25 @@ function filterTahunDashboard(d) {
         return '<option value="' + t + '"' + (Number(t) === Number(d.tahun) ? ' selected' : '') + '>' + t + '</option>';
       }).join('') +
     '</select></div>';
+}
+
+
+/**
+ * Ajakan mengganti password bagi yang masih memakai password awal.
+ *
+ * Sengaja berupa ajakan, bukan paksaan: memaksa ganti password di layar
+ * pertama berisiko membuat UMKM terkunci sebelum sempat memakai aplikasi.
+ */
+function spandukGantiPassword() {
+  const s = AppState.session || {};
+  if (s.passwordDiubah) return '';
+  return '<div class="panel mb-3" style="background:var(--madya-bg);border-left:4px solid var(--madya-accent);">' +
+    '<div class="d-flex flex-between align-center" style="flex-wrap:wrap;gap:10px;">' +
+      '<div style="font-size:13px;color:var(--madya-text);">' +
+        '<b><i class="bi bi-shield-exclamation"></i> Anda masih memakai password awal.</b><br>' +
+        '<span style="font-size:12px;">Password awal diketahui pengelola. Sebaiknya ganti dengan yang hanya Anda ketahui.</span>' +
+      '</div>' +
+      '<button class="btn btn-primary btn-sm" onclick="navigateTo(\'pengaturan\')">' +
+        '<i class="bi bi-key"></i> Ganti Sekarang</button>' +
+    '</div></div>';
 }

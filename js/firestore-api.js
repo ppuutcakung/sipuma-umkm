@@ -206,6 +206,7 @@ function userKeLama(u) {
     IDUMKM: u.idUmkm, StatusAksesLogin: u.statusAkses,
     AlasanPemblokiran: u.alasanPemblokiran, StatusAktif: u.statusAktif !== false,
     FotoURL: u.fotoURL, Alamat: u.alamat, Catatan: u.catatan,
+    PasswordDiubah: u.passwordDiubah === true,
     TanggalDibuat: u.tanggalDibuat
   };
 }

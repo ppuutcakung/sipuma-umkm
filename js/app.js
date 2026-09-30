@@ -50,9 +50,36 @@ function renderShellPeran() {
 
 /** Pindah halaman. Seluruh perpindahan terjadi di browser — tanpa memuat
  *  ulang halaman, sehingga terasa seketika. */
+/** Halaman pemberitahuan saat Admin menutup akses data cabang ini. */
+function renderDataDitutup() {
+  const info = (typeof infoCabangAktif === 'function') ? infoCabangAktif() : { nama: '' };
+  document.getElementById('app-container').innerHTML =
+    '<div class="panel text-center" style="padding:60px 24px;">' +
+      '<i class="bi bi-lock-fill" style="font-size:40px;color:var(--border-strong);"></i>' +
+      '<h5 class="mt-3">Data ' + esc(info.nama || 'cabang ini') + ' belum dibuka</h5>' +
+      '<p class="text-muted" style="font-size:13px;max-width:480px;margin:10px auto 0;">' +
+        'Admin cabang ini belum membuka akses datanya. Silakan hubungi pengelola ' +
+        'bila Anda memerlukannya, atau pilih cabang lain pada pemilih di kanan atas.</p>' +
+    '</div>';
+}
+
 function navigateTo(sectionId) {
   AppState.currentSection = sectionId;
   closeSidebar();
+
+  // Bila Admin menutup akses, tampilkan pemberitahuan yang jelas — bukan
+  // membiarkan tiap halaman gagal sendiri-sendiri dengan pesan error yang
+  // membingungkan. Pengaturan Akun tetap dibuka agar pengguna tidak terkunci.
+  if ((AppState.session || {}).roleFS === 'stakeholder'
+      && AppState.config
+      && AppState.config.laporanTerbukaUntukStakeholder === false
+      && sectionId !== 'pengaturan') {
+    document.querySelectorAll('.sidebar-nav .nav-link').forEach(function (a) {
+      a.classList.toggle('active', a.dataset.section === sectionId);
+    });
+    renderDataDitutup();
+    return;
+  }
 
   document.querySelectorAll('.sidebar-nav .nav-link').forEach(function (a) {
     a.classList.toggle('active', a.dataset.section === sectionId);
@@ -151,7 +178,55 @@ async function loadPengaturan() {
         '<button class="btn btn-primary btn-block" id="btnSimpanAkun" onclick="simpanPengaturanAkun()"><i class="bi bi-save"></i> Simpan Perubahan</button>' +
       '</div>' +
     '</div>' +
+    panelGantiPassword() +
     (s.role === 'Admin' ? panelPengaturanAplikasi() : '');
+}
+
+/** Panel ganti password — tersedia untuk semua peran. */
+function panelGantiPassword() {
+  return '<div class="panel mt-4">' +
+    '<div class="panel-title">Ganti Password</div>' +
+    '<div class="panel-sub">Password disimpan dalam bentuk terenkripsi dan tidak dapat dibaca siapa pun — termasuk Admin. Catat baik-baik password baru Anda.</div>' +
+    '<div class="grid grid-3 mt-3">' +
+      '<div class="form-group"><label class="form-label">Password Saat Ini</label>' +
+        '<input type="password" class="form-control" id="gpLama" autocomplete="current-password"></div>' +
+      '<div class="form-group"><label class="form-label">Password Baru</label>' +
+        '<input type="password" class="form-control" id="gpBaru" placeholder="Minimal 6 karakter" autocomplete="new-password"></div>' +
+      '<div class="form-group"><label class="form-label">Ulangi Password Baru</label>' +
+        '<input type="password" class="form-control" id="gpUlang" autocomplete="new-password"></div>' +
+    '</div>' +
+    '<button class="btn btn-primary" id="btnGantiPassword" onclick="gantiPasswordSaya()">' +
+      '<i class="bi bi-key"></i> Ganti Password</button>' +
+    '<div class="text-muted mt-3" style="font-size:11.5px;background:var(--canvas);padding:9px 12px;border-radius:8px;">' +
+      'Bila suatu saat Anda lupa password, hubungi Admin untuk dibuatkan yang baru. ' +
+      'Admin tidak dapat melihat password Anda, hanya menggantinya.' +
+    '</div>' +
+  '</div>';
+}
+
+async function gantiPasswordSaya() {
+  const btn = document.getElementById('btnGantiPassword');
+  const lama = document.getElementById('gpLama').value;
+  const baru = document.getElementById('gpBaru').value;
+  const ulang = document.getElementById('gpUlang').value;
+
+  if (!lama || !baru) { showToast('Peringatan', 'Lengkapi seluruh kolom.', 'warning'); return; }
+  if (baru.length < 6) { showToast('Peringatan', 'Password baru minimal 6 karakter.', 'warning'); return; }
+  if (baru !== ulang) { showToast('Peringatan', 'Ulangan password tidak sama.', 'warning'); return; }
+
+  setBtnLoading(btn, 'Mengganti...');
+  const res = await panggilAPI('gantiPasswordSendiri', [lama, baru]);
+  resetBtn(btn);
+
+  if (res.success) {
+    document.getElementById('gpLama').value = '';
+    document.getElementById('gpBaru').value = '';
+    document.getElementById('gpUlang').value = '';
+    AppState.session.passwordDiubah = true;
+    showToast('Berhasil', res.message, 'success');
+  } else {
+    showToast('Gagal', res.message || 'Gagal mengganti password.', 'danger');
+  }
 }
 
 /** Panel identitas aplikasi — hanya Admin yang boleh mengubah. */
@@ -216,19 +291,19 @@ function panelPengaturanAplikasi() {
   '</div>' +
 
   '<div class="panel mt-4">' +
-    '<div class="panel-title">Akses Laporan untuk Stakeholder</div>' +
-    '<div class="panel-sub">Mengatur apakah Stakeholder boleh melihat Laporan CSR cabang ini.</div>' +
+    '<div class="panel-title">Akses Data untuk Stakeholder</div>' +
+    '<div class="panel-sub">Mengatur apakah Stakeholder boleh melihat SELURUH data cabang ini — dashboard, omset, tenaga kerja, fasilitasi, prestasi, dan laporan.</div>' +
     '<div class="d-flex flex-between align-center mt-3" style="flex-wrap:wrap;gap:12px;' +
       'padding:12px 14px;border-radius:10px;background:' +
       (c.laporanTerbukaUntukStakeholder ? 'var(--pramandiri-bg)' : 'var(--pemula-bg)') + ';">' +
       '<div style="font-size:13px;color:' +
         (c.laporanTerbukaUntukStakeholder ? 'var(--pramandiri-text)' : 'var(--pemula-text)') + ';">' +
         '<b><i class="bi bi-' + (c.laporanTerbukaUntukStakeholder ? 'unlock-fill' : 'lock-fill') + '"></i> ' +
-        (c.laporanTerbukaUntukStakeholder ? 'Laporan TERBUKA' : 'Laporan DITUTUP') + '</b><br>' +
+        (c.laporanTerbukaUntukStakeholder ? 'Data TERBUKA' : 'Data DITUTUP') + '</b><br>' +
         '<span style="font-size:12px;">' +
         (c.laporanTerbukaUntukStakeholder
-          ? 'Stakeholder dapat melihat dan mengunduh Laporan CSR cabang ini.'
-          : 'Stakeholder tidak dapat melihat Laporan CSR cabang ini.') +
+          ? 'Stakeholder dapat melihat seluruh data cabang ini.'
+          : 'Stakeholder tidak dapat melihat data apa pun dari cabang ini.') +
         '</span></div>' +
       '<button class="btn ' + (c.laporanTerbukaUntukStakeholder ? 'btn-outline' : 'btn-primary') + '" ' +
         'id="btnAksesLaporan" onclick="ubahAksesLaporan(' + (!c.laporanTerbukaUntukStakeholder) + ')">' +
@@ -630,11 +705,13 @@ function simpanPeriodeAktif() {
 /** Buka atau tutup akses Laporan CSR bagi Stakeholder — per cabang. */
 function ubahAksesLaporan(jadikanTerbuka) {
   const pesan = jadikanTerbuka
-    ? 'Buka akses Laporan CSR cabang ini untuk <b>Stakeholder</b>?<br><br>' +
-      'Mereka akan dapat melihat dan mengunduh seluruh laporan cabang ini.'
-    : 'Tutup akses Laporan CSR cabang ini dari <b>Stakeholder</b>?<br><br>' +
-      'Mereka tidak akan bisa melihatnya lagi sampai Anda membukanya kembali. ' +
-      'Data laporannya sendiri <b>tidak dihapus</b>.';
+    ? 'Buka akses data cabang ini untuk <b>Stakeholder</b>?<br><br>' +
+      'Mereka akan dapat melihat dashboard, omset, tenaga kerja, fasilitasi, ' +
+      'prestasi, dan laporan cabang ini.'
+    : 'Tutup akses data cabang ini dari <b>Stakeholder</b>?<br><br>' +
+      'Mereka tidak akan bisa melihat data apa pun dari cabang ini sampai ' +
+      'Anda membukanya kembali. Datanya sendiri <b>tidak dihapus</b>, dan ' +
+      'Admin tetap dapat mengaksesnya seperti biasa.';
 
   showConfirm(pesan, async function () {
     closeModal('modalConfirm');
@@ -646,8 +723,8 @@ function ubahAksesLaporan(jadikanTerbuka) {
       AppState.config.laporanTerbukaUntukStakeholder = !!jadikanTerbuka;
       loadPengaturan();
       showToast('Berhasil',
-        jadikanTerbuka ? 'Laporan kini terbuka untuk Stakeholder.'
-                       : 'Laporan kini ditutup dari Stakeholder.', 'success');
+        jadikanTerbuka ? 'Data cabang ini kini terbuka untuk Stakeholder.'
+                       : 'Data cabang ini kini ditutup dari Stakeholder.', 'success');
     } else {
       showToast('Gagal', res.message || 'Gagal mengubah pengaturan.', 'danger');
     }

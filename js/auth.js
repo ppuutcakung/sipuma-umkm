@@ -121,6 +121,7 @@ async function handleLogin(e) {
     role: roleKeLama(p.role),
     roleFS: p.role,
     cabang: p.cabang, idUmkm: p.idUmkm, fotoURL: p.fotoURL, alamat: p.alamat,
+    passwordDiubah: p.passwordDiubah === true,
     // Dipakai untuk permintaan yang tetap harus lewat GAS: unggah berkas
     // ke Drive dan penulisan koleksi `kredensial` yang tertutup bagi browser.
     tokenGas: hasil.data.tokenGas || ''
