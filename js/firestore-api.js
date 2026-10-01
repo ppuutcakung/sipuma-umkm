@@ -492,7 +492,7 @@ async function jalankanAksiFirestore(action, a) {
       const r = a[0];
       const p = Number(r.SkorProduksi) || 0, pm = Number(r.SkorPemasaran) || 0, k = Number(r.SkorKeuangan) || 0;
       const rata = Math.round(((p + pm + k) / 3) * 10) / 10;
-      const kelas = rata >= 85 ? 'Mandiri' : rata >= 70 ? 'Pra Mandiri' : rata >= 55 ? 'Madya' : 'Pemula';
+      const kelas = hitungKelasFS(rata);
       const isi = {
         cabang: cab, idUmkm: r.IDUMKM, namaUMKM: r.NamaUMKM || '',
         skorProduksi: p, skorPemasaran: pm, skorKeuangan: k, rataRata: rata, kelas: kelas,
@@ -1064,3 +1064,20 @@ async function panggilGAS(action, args, opsi) {
 }
 
 
+
+
+/**
+ * Tentukan kelas kemandirian dari rata-rata skor.
+ *
+ * ⚠️ Ambang batas ini HARUS sama persis dengan hitungKelas() di Kode.gs.
+ * Sebelumnya di sini tertulis ambang yang berbeda (85/70/55), sehingga
+ * skor 70–85 selalu jatuh ke "Pra Mandiri" — kelasnya tampak tidak
+ * pernah berubah meski skornya naik.
+ */
+function hitungKelasFS(rataRata) {
+  const r = Number(rataRata) || 0;
+  if (r < 25) return 'Pemula';
+  if (r < 50) return 'Madya';
+  if (r < 75) return 'Pra Mandiri';
+  return 'Mandiri';
+}
