@@ -286,9 +286,36 @@ const AKSI_MENGUBAH = {
   setConfig: 'config', setPeriodeAktif: 'config'
 };
 
+// Pengisian data hanya untuk UMKM yang berstatus AKTIF.
+const AKSI_WAJIB_UMKM_AKTIF = ['saveOmset', 'saveTenagaKerja', 'saveKemandirian',
+                               'addFasilitasi', 'addPrestasi', 'addLegalitas'];
+
+/** Pastikan UMKM sasaran masih aktif sebelum datanya diubah. */
+async function pastikanUmkmAktif(kodeUmkm) {
+  if (!kodeUmkm) return null;
+  const d = await db.collection('umkm').doc(kodeUmkm).get();
+  if (!d.exists) return 'Data UMKM tidak ditemukan.';
+  if (d.data().statusAktif === false) {
+    return 'UMKM "' + (d.data().namaUMKM || kodeUmkm) + '" berstatus TIDAK AKTIF, ' +
+           'sehingga datanya tidak dapat diisi atau diubah. ' +
+           'Aktifkan kembali lewat Data Master UMKM bila ingin melanjutkan.';
+  }
+  return null;
+}
+
 async function jalankanAksiFirestore(action, a) {
   const cab = cabangAktif();
   const sesi = AppState.session || {};
+
+  // Menonaktifkan UMKM berarti seluruh pengisian datanya ikut berhenti —
+  // bukan hanya disembunyikan dari ringkasan. Diperiksa di satu tempat
+  // agar tidak ada jalur yang terlewat.
+  if (AKSI_WAJIB_UMKM_AKTIF.indexOf(action) > -1) {
+    const rec = a[0] || {};
+    const kode = (typeof rec === 'string') ? rec : (rec.IDUMKM || '');
+    const pesan = await pastikanUmkmAktif(kode);
+    if (pesan) return gagalFS(pesan);
+  }
 
   // Penghapusan UMKM menyentuh banyak koleksi sekaligus, jadi seluruh
   // cache dibersihkan — lebih aman daripada menebak mana saja yang ikut.
@@ -848,16 +875,24 @@ async function susunDashboardOrganisasi(tahunDiminta) {
   ]);
 
   const aktif = umkmR.filter(function (u) { return u.statusAktif !== false; });
+  // Kode UMKM aktif — dipakai menyaring SELURUH perhitungan di bawah.
+  // UMKM yang dinonaktifkan datanya tetap tersimpan, tetapi tidak lagi
+  // ikut dihitung di ringkasan program.
+  const kodeAktif = {};
+  aktif.forEach(function (u) { kodeAktif[u.kodeUnik || u._id] = true; });
+  const hanyaAktif = function (r) { return kodeAktif[r.idUmkm] === true; };
   const perSektor = { Kuliner: 0, Kerajinan: 0, Pertanian: 0, Manufaktur: 0 };
   aktif.forEach(function (u) { if (perSektor[u.sektor] !== undefined) perSektor[u.sektor]++; });
 
+  const omsetAktif = omsetTh.filter(hanyaAktif);
   const omsetPerBulan = BULAN_LIST.map(function (b) {
-    return omsetTh.reduce(function (s, o) { return s + ((o.bulanan || {})[b] || 0); }, 0);
+    return omsetAktif.reduce(function (s, o) { return s + ((o.bulanan || {})[b] || 0); }, 0);
   });
   const totalOmset = omsetPerBulan.reduce(function (s, v) { return s + v; }, 0);
 
+  const tkAktif = tkTh.filter(hanyaAktif);
   const tenagaKerjaPerBulan = BULAN_LIST.map(function (b) {
-    return tkTh.filter(function (t) { return t.bulan === b; })
+    return tkAktif.filter(function (t) { return t.bulan === b; })
                .reduce(function (s, t) { return s + (Number(t.jumlah) || 0); }, 0);
   });
 
@@ -869,7 +904,7 @@ async function susunDashboardOrganisasi(tahunDiminta) {
   // dianggap nol — padahal tenaga kerjanya tetap ada. Cara ini mengambil
   // angka terbaru yang dimiliki setiap UMKM, lalu menjumlahkannya.
   const terakhirPerUmkm = {};
-  tkTh.forEach(function (t) {
+  tkAktif.forEach(function (t) {
     const urut = BULAN_LIST.indexOf(t.bulan);
     const ada = terakhirPerUmkm[t.idUmkm];
     if (!ada || urut > ada.urut) {
@@ -880,10 +915,11 @@ async function susunDashboardOrganisasi(tahunDiminta) {
     .reduce(function (s, k) { return s + terakhirPerUmkm[k].jumlah; }, 0);
 
   const distribusiKelas = { 'Pemula': 0, 'Madya': 0, 'Pra Mandiri': 0, 'Mandiri': 0 };
-  kelasR.forEach(function (k) { if (distribusiKelas[k.kelas] !== undefined) distribusiKelas[k.kelas]++; });
+  const kelasAktif = kelasR.filter(hanyaAktif);
+  kelasAktif.forEach(function (k) { if (distribusiKelas[k.kelas] !== undefined) distribusiKelas[k.kelas]++; });
 
   const jumlahPrestasi = {};
-  presR.forEach(function (p) {
+  presR.filter(hanyaAktif).forEach(function (p) {
     const n = p.namaUMKM || '(Tidak diketahui)';
     jumlahPrestasi[n] = (jumlahPrestasi[n] || 0) + 1;
   });
@@ -907,10 +943,10 @@ async function susunDashboardOrganisasi(tahunDiminta) {
     omsetPerBulan: omsetPerBulan,
     tenagaKerjaPerBulan: tenagaKerjaPerBulan,
     totalTenagaKerja: totalTenagaKerja,
-    totalFasilitasi: fasR.reduce(function (s, f) { return s + (Number(f.nominal) || 0); }, 0),
+    totalFasilitasi: fasR.filter(hanyaAktif).reduce(function (s, f) { return s + (Number(f.nominal) || 0); }, 0),
     targetFasilitasi: Number(cfg.targetFasilitasiTahunan) || 0,
     distribusiKelas: distribusiKelas,
-    totalUMKMDenganKelas: kelasR.length || 1,
+    totalUMKMDenganKelas: kelasAktif.length || 1,
     prestasiTerbaru: prestasiTerbaru,
     laporanTerbaru: lapR.map(laporanKeLama)
       .sort(function (x, y) { return new Date(y.TanggalUpload) - new Date(x.TanggalUpload); }).slice(0, 5),

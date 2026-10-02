@@ -260,3 +260,16 @@ function mulaiPantauServer() {
     if (AppState.session) periksaSambunganServer();
   }, 60000);
 }
+
+
+/** Spanduk peringatan bila UMKM yang dipilih berstatus tidak aktif. */
+function spandukUmkmNonaktif(kodeUmkm) {
+  const u = (AppState.cache.umkm || []).find(function (x) { return x.KodeUnik === kodeUmkm; });
+  if (!u || umkmAktif(u)) return '';
+  return '<div class="panel mb-3" style="background:var(--pemula-bg);border-left:4px solid var(--pemula-accent);">' +
+    '<div style="font-size:13px;color:var(--pemula-text);">' +
+      '<b><i class="bi bi-slash-circle"></i> ' + esc(u.NamaUMKM) + ' berstatus TIDAK AKTIF.</b><br>' +
+      '<span style="font-size:12px;">Datanya tidak dapat diisi atau diubah, dan tidak ikut dihitung ' +
+      'di Dashboard maupun berkas ekspor. Aktifkan kembali lewat <b>Data Master UMKM</b> bila ingin melanjutkan.</span>' +
+    '</div></div>';
+}

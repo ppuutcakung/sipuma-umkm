@@ -205,25 +205,48 @@ function eksporDataMasterUMKM(format) {
 function eksporRekapOmset(format) {
   const tahun = (document.getElementById('omsetTahunSelect') || {}).value ||
                 AppState.config.tahunAktif || new Date().getFullYear();
-  const semua = AppState.cache.omsetAll || [];
-  const rows = semua.filter(function (r) { return Number(r.Tahun) === Number(tahun); });
 
-  const kolom = ['No', 'Nama UMKM', 'Target Omset', 'Total Realisasi', 'Capaian (%)', 'Status'];
-  const lebar = [5, 30, 18, 18, 12, 16];
-  const baris = rows.map(function (r, i) {
-    const target = Number(r.TargetOmsetTahunan) || 0;
-    const real = Number(r.TotalRealisasi) || 0;
-    return [i + 1, r.NamaUMKM, formatRupiahFull(target), formatRupiahFull(real),
-            target ? Math.round(real / target * 100) + '%' : '-', r.StatusTarget || '-'];
+  // Dibangun dari DAFTAR UMKM, bukan dari data omset.
+  //
+  // Sebelumnya dibangun dari data omset, sehingga UMKM yang belum mengisi
+  // tahun itu sama sekali tidak muncul di berkas — laporannya jadi tampak
+  // kurang tanpa penjelasan. Sekarang semua UMKM aktif ikut tercantum;
+  // yang belum mengisi tertulis Rp 0.
+  const omsetTh = (AppState.cache.omsetAll || []).filter(function (r) {
+    return Number(r.Tahun) === Number(tahun);
   });
-  jalankanEkspor(format, 'Rekap Omset Seluruh UMKM', kolom, baris, lebar, 'Tahun ' + tahun);
+  const umkmAktifSaja = (AppState.cache.umkm || []).filter(umkmAktif);
+
+  const baris = umkmAktifSaja.map(function (u) {
+    const o = omsetTh.find(function (r) { return r.IDUMKM === u.KodeUnik; });
+    const target = o ? (Number(o.TargetOmsetTahunan) || 0) : 0;
+    const real = o ? (Number(o.TotalRealisasi) || 0) : 0;
+    return {
+      nama: u.NamaUMKM,
+      sektor: u.SektorUsaha,
+      target: target,
+      real: real,
+      persen: target ? Math.round(real / target * 100) + '%' : '-',
+      status: o ? (o.StatusTarget || '-') : 'Belum ada data'
+    };
+  }).sort(function (a, b) { return b.real - a.real; })   // omset tertinggi di atas
+    .map(function (r, i) {
+      return [i + 1, r.nama, r.sektor, formatRupiahFull(r.target),
+              formatRupiahFull(r.real), r.persen, r.status];
+    });
+
+  const kolom = ['No', 'Nama UMKM', 'Sektor', 'Target Omset', 'Total Realisasi', 'Capaian (%)', 'Status'];
+  const lebar = [5, 28, 14, 18, 18, 12, 16];
+  jalankanEkspor(format, 'Rekap Omset Seluruh UMKM', kolom, baris, lebar,
+    'Tahun ' + tahun + '  |  ' + umkmAktifSaja.length + ' UMKM aktif');
 }
 
 /** Rekap Tenaga Kerja Seluruh UMKM */
 function eksporRekapTenagaKerja(format) {
   const filterSektor = (document.getElementById('rekapTkFilterSektor') || {}).value || '';
+  // Hanya UMKM aktif — yang dinonaktifkan tidak ikut dilaporkan
   const semuaUmkm = (AppState.cache.umkm || []).filter(function (u) {
-    return !filterSektor || u.SektorUsaha === filterSektor;
+    return umkmAktif(u) && (!filterSektor || u.SektorUsaha === filterSektor);
   });
   const semuaTk = AppState.cache.tenagaKerjaAll || [];
 
@@ -250,7 +273,10 @@ function eksporRekapTenagaKerja(format) {
 
 /** Rekap Asesmen Kemandirian */
 function eksporRekapAsesmen(format) {
-  const rows = AppState.cache.kemandirianAll || [];
+  const aktif = daftarKodeUmkmAktif();
+  const rows = (AppState.cache.kemandirianAll || [])
+    .filter(function (r) { return aktif.indexOf(r.IDUMKM) > -1; })
+    .sort(function (a, b) { return (Number(b.RataRata) || 0) - (Number(a.RataRata) || 0); });
   const kolom = ['No', 'Nama UMKM', 'Produksi', 'Pemasaran', 'Keuangan',
                  'Rata-Rata', 'Kelas', 'Bulan Asesmen', 'Asesor'];
   const lebar = [5, 28, 10, 11, 11, 11, 14, 16, 18];
@@ -264,7 +290,9 @@ function eksporRekapAsesmen(format) {
 
 /** Legalitas UMKM */
 function eksporLegalitas(format) {
-  const rows = (AppState.cache.legalitas || []).slice();
+  const aktifL = daftarKodeUmkmAktif();
+  const rows = (AppState.cache.legalitas || [])
+    .filter(function (l) { return aktifL.indexOf(l.IDUMKM) > -1; });
   const urutan = { 'Kadaluarsa': 0, 'Perlu Diperbarui': 1, 'Aktif': 2 };
   rows.sort(function (a, b) {
     const d = (urutan[a.Status] || 3) - (urutan[b.Status] || 3);
@@ -285,4 +313,11 @@ function eksporLegalitas(format) {
   const lewat = rows.filter(function (l) { return l.Status === 'Kadaluarsa'; }).length;
   jalankanEkspor(format, 'Legalitas UMKM', kolom, baris, lebar,
     'Aktif: ' + aktif + '  |  Perlu Diperbarui: ' + perbarui + '  |  Kadaluarsa: ' + lewat);
+}
+
+
+/** Kode seluruh UMKM yang berstatus aktif pada cabang yang sedang dilihat. */
+function daftarKodeUmkmAktif() {
+  return (AppState.cache.umkm || []).filter(umkmAktif)
+    .map(function (u) { return u.KodeUnik; });
 }

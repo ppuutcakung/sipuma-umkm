@@ -327,7 +327,8 @@ function renderOmsetForm(role, kodeUmkm) {
       </div>
       <div id="omsetFormArea"><div class="loading-inline"><div class="spinner"></div></div></div>
     </div>
-    <div id="closingOmsetArea"></div>
+    ${spandukUmkmNonaktif(kodeUmkm)}
+        <div id="closingOmsetArea"></div>
     ${role === 'Admin' ? `
     <div class="panel">
       <div class="flex-between" style="flex-wrap:wrap;gap:8px;"><div class="panel-title mb-0">Rekap Omset Seluruh UMKM</div>${tombolEkspor('eksporRekapOmset')}</div>
@@ -609,6 +610,7 @@ function renderTenagaKerjaForm(role, kodeUmkm) {
         <div class="form-group"><label class="form-label">Jumlah Tenaga Kerja</label><input type="number" min="0" class="form-control" id="tkJumlah" placeholder="Contoh: 6"></div>
         <div class="form-group"><label class="form-label">Catatan (opsional)</label><textarea class="form-control" id="tkCatatan" placeholder="Contoh: +2 karyawan baru warga RW 04"></textarea></div>
         <button class="btn btn-primary btn-block" id="btnSimpanTk" onclick="simpanTenagaKerja('${kodeUmkm}')"><i class="bi bi-save"></i> Simpan Data Tenaga Kerja</button>
+        ${spandukUmkmNonaktif(kodeUmkm)}
         <div id="closingTkArea"></div>
       </div>
       <div class="table-card">
@@ -790,6 +792,7 @@ function renderKemandirianForm(kodeUmkm) {
   container.innerHTML = `
     ${pageHeader('Evaluasi Terstandarisasi', 'Asesmen', 'Kelas Kemandirian',
       'Input skor 3 pilar (Produksi, Pemasaran, Keuangan). Sistem otomatis menghitung rata-rata & kelas kemandirian akhir.', '')}
+    ${spandukUmkmNonaktif(kodeUmkm)}
     <div class="grid grid-1-2">
       <div class="panel">
         <div class="form-group"><label class="form-label">Pilih UMKM</label>${dropdownUmkmCari('kkUmkmSelect', kodeUmkm, "renderKemandirianForm(document.getElementById('kkUmkmSelect').value)")}</div>
@@ -2194,3 +2197,4 @@ function resetPasswordUser(username) {
       });
     }, 'Ya, Ganti Password');
 }
+
