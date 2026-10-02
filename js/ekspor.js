@@ -50,8 +50,17 @@ function bangunTabelEkspor(judul, kolom, baris, lebar, subJudul) {
   html += '<tr><td colspan="' + jml + '" style="text-align:center;font-size:10pt;border:none;padding:2px 6px 10px;">' +
     'Periode Download: ' + escEks(waktuUnduhSekarang()) + '</td></tr>';
   if (subJudul) {
-    html += '<tr><td colspan="' + jml + '" style="text-align:center;font-size:10pt;font-style:italic;border:none;padding:0 6px 10px;">' +
-      escEks(subJudul) + '</td></tr>';
+    // Keterangan boleh lebih dari satu baris — ringkasan per sektor
+    // ditaruh di baris sendiri agar tidak berdesakan dengan baris utama.
+    const barisKet = String(subJudul).split('\n');
+    html += '<tr><td colspan="' + jml + '" style="text-align:center;font-size:10pt;border:none;padding:0 6px 10px;">' +
+      barisKet.map(function (b, i) {
+        return i === 0
+          ? '<i>' + escEks(b) + '</i>'
+          : '<div style="font-size:9pt;margin-top:3px;font-family:Consolas,\'Courier New\',monospace;' +
+              'white-space:pre;">' + escEks(b) + '</div>';
+      }).join('') +
+      '</td></tr>';
   }
   html += '<tr><td colspan="' + jml + '" style="border:none;height:6px;"></td></tr>';
 
@@ -72,10 +81,17 @@ function bangunTabelEkspor(judul, kolom, baris, lebar, subJudul) {
       const latar = idx % 2 ? '#F8FAFC' : '#FFFFFF';
       html += '<tr style="background:' + latar + ';">';
       r.forEach(function (sel) {
-        const angka = typeof sel === 'number';
+        // Sel boleh berupa objek { teks, warna, tebal } untuk penandaan
+        // khusus — misalnya status "Tidak Aktif" yang perlu merah.
+        const objek = sel && typeof sel === 'object' && sel.teks !== undefined;
+        const isi = objek ? sel.teks : sel;
+        const angka = typeof isi === 'number';
+        const gaya = objek
+          ? (sel.warna ? 'color:' + sel.warna + ';' : '') + (sel.tebal ? 'font-weight:bold;' : '')
+          : '';
         html += '<td style="border:1px solid #CBD5E1;padding:6px;vertical-align:top;' +
-          'text-align:' + (angka ? 'right' : 'left') + ';mso-number-format:\\@;">' +
-          escEks(sel === null || sel === undefined ? '' : sel) + '</td>';
+          'text-align:' + (angka ? 'right' : 'left') + ';mso-number-format:\\@;' + gaya + '">' +
+          escEks(isi === null || isi === undefined ? '' : isi) + '</td>';
       });
       html += '</tr>';
     });
@@ -193,12 +209,19 @@ function eksporDataMasterUMKM(format) {
   const kolom = ['No', 'Nama UMKM', 'Sektor', 'Spesialisasi', 'Alamat Usaha', 'Binaan Sejak', 'Status'];
   const lebar = [5, 28, 14, 24, 32, 14, 12];
   const baris = rows.map(function (u, i) {
+    const aktif = (typeof umkmAktif === 'function') ? umkmAktif(u) : true;
     return [i + 1, u.NamaUMKM, u.SektorUsaha, u.Spesialisasi || '-',
             u.AlamatUsaha || '-', formatBulanTahun(u.TanggalBinaan),
-            (typeof umkmAktif === 'function' && umkmAktif(u)) ? 'Aktif' : 'Tidak Aktif'];
+            // Status tidak aktif ditandai merah agar langsung terlihat
+            // saat berkasnya dibaca tanpa perlu menelusuri satu per satu.
+            aktif ? 'Aktif' : { teks: 'Tidak Aktif', warna: '#DC2626', tebal: true }];
   });
+  const nAktif = rows.filter(function (u) {
+    return (typeof umkmAktif === 'function') ? umkmAktif(u) : true;
+  }).length;
   jalankanEkspor(format, 'Data Master UMKM', kolom, baris, lebar,
-    'Jumlah data: ' + rows.length + ' UMKM');
+    'Jumlah data: ' + rows.length + ' UMKM   |   Aktif: ' + nAktif +
+    '   |   Tidak Aktif: ' + (rows.length - nAktif));
 }
 
 /** Rekap Omset Seluruh UMKM */
@@ -237,8 +260,21 @@ function eksporRekapOmset(format) {
 
   const kolom = ['No', 'Nama UMKM', 'Sektor', 'Target Omset', 'Total Realisasi', 'Capaian (%)', 'Status'];
   const lebar = [5, 28, 14, 18, 18, 12, 16];
+
+  // Omset per sektor — menunjukkan sektor mana yang porsinya terbesar
+  const realPerUmkm = {};
+  omsetTh.forEach(function (o) { realPerUmkm[o.IDUMKM] = Number(o.TotalRealisasi) || 0; });
+  const ringkas = ringkasanPerSektor(umkmAktifSaja,
+    function (u) { return realPerUmkm[u.KodeUnik] || 0; },
+    formatRupiah);
+
+  const totalSemua = umkmAktifSaja.reduce(function (s, u) {
+    return s + (realPerUmkm[u.KodeUnik] || 0);
+  }, 0);
+
   jalankanEkspor(format, 'Rekap Omset Seluruh UMKM', kolom, baris, lebar,
-    'Tahun ' + tahun + '  |  ' + umkmAktifSaja.length + ' UMKM aktif');
+    'Tahun ' + tahun + '   |   ' + umkmAktifSaja.length + ' UMKM aktif' +
+    '   —   Total: ' + formatRupiahFull(totalSemua) + '\n' + ringkas);
 }
 
 /** Rekap Tenaga Kerja Seluruh UMKM */
@@ -267,8 +303,19 @@ function eksporRekapTenagaKerja(format) {
 
   const kolom = ['No', 'Nama UMKM', 'Sektor', 'Bulan Input Terakhir', 'Jumlah Tenaga Kerja'];
   const lebar = [5, 30, 14, 20, 18];
+
+  // Total tenaga kerja per sektor — supaya langsung terlihat sektor mana
+  // yang menyerap tenaga kerja terbanyak.
+  const tkPerUmkm = {};
+  baris.forEach(function (r) { tkPerUmkm[r[1]] = Number(r[4]) || 0; });
+  const ringkas = ringkasanPerSektor(semuaUmkm,
+    function (u) { return tkPerUmkm[u.NamaUMKM] || 0; },
+    function (n) { return n + ' orang'; });
+
+  const totalSemua = Object.keys(tkPerUmkm).reduce(function (s, k) { return s + tkPerUmkm[k]; }, 0);
   jalankanEkspor(format, 'Rekap Tenaga Kerja Seluruh UMKM', kolom, baris, lebar,
-    filterSektor ? 'Sektor: ' + filterSektor : 'Seluruh sektor');
+    (filterSektor ? 'Sektor: ' + filterSektor : 'Seluruh sektor') +
+    '   —   Total: ' + totalSemua + ' orang\n' + ringkas);
 }
 
 /** Rekap Asesmen Kemandirian */
@@ -277,6 +324,36 @@ function eksporRekapAsesmen(format) {
   const rows = (AppState.cache.kemandirianAll || [])
     .filter(function (r) { return aktif.indexOf(r.IDUMKM) > -1; })
     .sort(function (a, b) { return (Number(b.RataRata) || 0) - (Number(a.RataRata) || 0); });
+
+  // Sebaran KELAS × SEKTOR.
+  //
+  // Satu baris per kelas, dengan urutan sektor yang SELALU SAMA — sengaja
+  // tidak diurutkan per baris, supaya kolomnya sejajar dan mudah
+  // dibandingkan antar kelas saat dibaca sekilas.
+  const sektorUmkm = {};
+  (AppState.cache.umkm || []).forEach(function (u) { sektorUmkm[u.KodeUnik] = u.SektorUsaha; });
+
+  const matriks = {};
+  TIER_LIST.forEach(function (kelas) {
+    matriks[kelas] = {};
+    SEKTOR_LIST.forEach(function (s) { matriks[kelas][s] = 0; });
+  });
+  rows.forEach(function (r) {
+    const kelas = r.Kelas;
+    const sektor = sektorUmkm[r.IDUMKM];
+    if (matriks[kelas] && matriks[kelas][sektor] !== undefined) matriks[kelas][sektor]++;
+  });
+
+  const ringkasSektor = TIER_LIST.map(function (kelas) {
+    const totalKelas = SEKTOR_LIST.reduce(function (s, x) { return s + matriks[kelas][x]; }, 0);
+    const rinci = SEKTOR_LIST.map(function (s) {
+      return (s + ': ' + matriks[kelas][s]).padEnd(16, ' ');
+    }).join('');
+    // Nama kelas dan jumlahnya disamakan lebarnya agar kolom sektor
+    // di kanannya berbaris lurus antar kelas.
+    const label = (kelas + ' (' + totalKelas + ' UMKM)').padEnd(24, ' ');
+    return label + rinci;
+  }).join('\n');
   const kolom = ['No', 'Nama UMKM', 'Produksi', 'Pemasaran', 'Keuangan',
                  'Rata-Rata', 'Kelas', 'Bulan Asesmen', 'Asesor'];
   const lebar = [5, 28, 10, 11, 11, 11, 14, 16, 18];
@@ -285,7 +362,8 @@ function eksporRekapAsesmen(format) {
             r.RataRata, r.Kelas, formatBulanTahun(r.TanggalAsesmen), r.Asesor || '-'];
   });
   jalankanEkspor(format, 'Rekap Asesmen Kemandirian UMKM', kolom, baris, lebar,
-    'Jumlah UMKM yang telah diasesmen: ' + rows.length);
+    'Jumlah UMKM yang telah diasesmen: ' + rows.length +
+    '\n' + ringkasSektor);
 }
 
 /** Legalitas UMKM */
@@ -320,4 +398,21 @@ function eksporLegalitas(format) {
 function daftarKodeUmkmAktif() {
   return (AppState.cache.umkm || []).filter(umkmAktif)
     .map(function (u) { return u.KodeUnik; });
+}
+
+
+/** Rangkum angka per sektor jadi satu baris keterangan. */
+function ringkasanPerSektor(daftarUmkm, ambilAngka, formatAngka) {
+  const total = {};
+  SEKTOR_LIST.forEach(function (s) { total[s] = 0; });
+  daftarUmkm.forEach(function (u) {
+    if (total[u.SektorUsaha] === undefined) return;
+    total[u.SektorUsaha] += Number(ambilAngka(u)) || 0;
+  });
+  // Sektor dengan angka tertinggi ditaruh di depan, agar langsung terlihat
+  // mana penyumbang terbesarnya.
+  return SEKTOR_LIST.slice()
+    .sort(function (a, b) { return total[b] - total[a]; })
+    .map(function (s) { return s + ': ' + (formatAngka ? formatAngka(total[s]) : total[s]); })
+    .join('   |   ');
 }
