@@ -1,3 +1,10 @@
+// Kategori Laporan CSR.
+//
+// Sengaja TIDAK diletakkan di config.js: berkas itu menyimpan GAS_URL
+// milik pemasang, jadi tidak boleh ikut dikirim saat ada pembaruan —
+// menimpanya akan menghapus alamat server dan membuat aplikasi berhenti.
+const KATEGORI_LAPORAN = ['AP-AR & KPI', 'Hasil SROI', 'UMKM goes to Vendor', 'Lainnya'];
+
 // ════════════════════════════════════════════════════════
 // SELURUH HALAMAN SIPUMA (Admin / CSR UT / UMKM)
 // ════════════════════════════════════════════════════════
