@@ -1621,6 +1621,7 @@ function renderLaporanCsr(rows, isAdmin, tahunFilter) {
           <div class="f-actions">
             <button class="btn btn-outline btn-sm" onclick="previewFile('${f.FileURL}','${esc(f.NamaFile)}',true,'${f.FileID}')"><i class="bi bi-eye"></i> Baca PDF</button>
             <a class="btn btn-primary btn-sm" href="${f.FileURL}" target="_blank"><i class="bi bi-download"></i> Unduh</a>
+            ${isAdmin ? `<button class="btn btn-outline btn-sm" onclick='formUbahLaporan(${JSON.stringify(f)})'><i class="bi bi-pencil"></i> Ubah</button>` : ''}
             ${isAdmin ? `<button class="btn btn-danger btn-sm" onclick="hapusLaporan('${f.ID}')"><i class="bi bi-trash"></i></button>` : ''}
           </div>
         </div>`).join('') : `<div class="table-empty" style="grid-column:1/-1;"><i class="bi bi-file-earmark-x"></i>${
@@ -1635,6 +1636,8 @@ function formUploadLaporan() {
       <div class="form-group"><label class="form-label">Bulan</label><select class="form-select" id="lapBulan">${optionsHtml(BULAN_LIST)}</select></div>
       <div class="form-group"><label class="form-label">Tahun</label><input type="number" class="form-control" id="lapTahun" value="${AppState.config.tahunAktif || 2026}"></div>
     </div>
+    <div class="form-group"><label class="form-label">Kategori Laporan</label>
+      <select class="form-select" id="lapKategori">${optionsHtml(DAFTAR_KATEGORI_LAPORAN)}</select></div>
     <div class="form-group"><label class="form-label">Nama File</label><input class="form-control" id="lapNama" placeholder="Laporan_CSR_Agustus_2026"></div>
     <div class="form-group"><label class="form-label">File PDF</label><input type="file" accept="application/pdf" class="form-control" id="lapFile" style="padding:6px;"></div>
     <div class="form-group"><label class="form-label">Deskripsi Laporan</label><textarea class="form-control" id="lapDeskripsi"></textarea></div>
@@ -2256,4 +2259,72 @@ function resetPasswordUser(username) {
 function gantiKategoriLaporanCsr(kategori) {
   _laporanCsrKategori = kategori || '';
   renderLaporanCsr(AppState.cache.laporanCsr || [], _laporanCsrIsAdmin, _laporanCsrTahun);
+}
+
+
+/**
+ * Ubah keterangan laporan tanpa mengunggah ulang berkasnya.
+ *
+ * Berkas PDF-nya sengaja TIDAK bisa diganti di sini — bila berkasnya
+ * yang salah, lebih jelas mengunggah ulang lalu menghapus yang lama,
+ * supaya tidak ada tautan yang menunjuk berkas berbeda dari keterangannya.
+ */
+function formUbahLaporan(f) {
+  const body = `
+    <div class="d-flex align-center gap-2 mb-3" style="background:var(--canvas);padding:10px 12px;border-radius:8px;">
+      <i class="bi bi-file-earmark-pdf-fill" style="color:var(--pemula-text);font-size:18px;"></i>
+      <div style="font-size:12.5px;"><b>${esc(f.NamaFile)}</b>
+        <div class="text-muted" style="font-size:11px;">Berkas PDF tidak diubah — hanya keterangannya.</div></div>
+    </div>
+    <div class="grid grid-2">
+      <div class="form-group"><label class="form-label">Bulan</label>
+        <select class="form-select" id="ubBulan">${optionsHtml(BULAN_LIST, f.Bulan)}</select></div>
+      <div class="form-group"><label class="form-label">Tahun</label>
+        <input type="number" class="form-control" id="ubTahun" value="${esc(f.Tahun)}"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Kategori Laporan</label>
+      <select class="form-select" id="ubKategori">${optionsHtml(DAFTAR_KATEGORI_LAPORAN, f.Kategori || 'Lainnya')}</select></div>
+    <div class="form-group"><label class="form-label">Nama Tampilan</label>
+      <input class="form-control" id="ubNama" value="${esc(f.NamaFile)}"></div>
+    <div class="form-group"><label class="form-label">Deskripsi Laporan</label>
+      <textarea class="form-control" id="ubDeskripsi">${esc(f.DeskripsiLaporan || '')}</textarea></div>
+    <div class="form-group"><label class="form-label">Status</label>
+      <select class="form-select" id="ubStatus">${optionsHtml(['Draft','Final','Archived'], f.Status || 'Final')}</select></div>
+  `;
+  const footer = `<button class="btn btn-outline" onclick="closeModal('modalGeneric')">Batal</button>
+    <button class="btn btn-primary" id="btnUbahLap" onclick="simpanUbahLaporan('${esc(f.ID)}')">
+      <i class="bi bi-check-lg"></i> Simpan Perubahan</button>`;
+  openModal('modalGeneric', 'Ubah Keterangan Laporan', body, footer);
+}
+
+function simpanUbahLaporan(id) {
+  const nama = document.getElementById('ubNama').value.trim();
+  if (!nama) { showToast('Peringatan', 'Nama tampilan wajib diisi.', 'warning'); return; }
+
+  const data = {
+    ID: id,
+    Bulan: document.getElementById('ubBulan').value,
+    Tahun: Number(document.getElementById('ubTahun').value) || new Date().getFullYear(),
+    Kategori: document.getElementById('ubKategori').value,
+    NamaFile: nama,
+    DeskripsiLaporan: document.getElementById('ubDeskripsi').value.trim(),
+    Status: document.getElementById('ubStatus').value
+  };
+
+  const btn = document.getElementById('btnUbahLap');
+  setBtnLoading(btn, 'Menyimpan...');
+  panggilServerAman('updateLaporanCSR', [data], function (res) {
+    resetBtn(btn);
+    if (res.success) {
+      closeModal('modalGeneric');
+      showToast('Berhasil', 'Keterangan laporan berhasil diperbarui.', 'success');
+      AppState.cache.laporanCsr = null;
+      loadLaporanCsrAdmin();
+    } else {
+      showToast('Gagal', res.message || 'Gagal menyimpan perubahan.', 'danger');
+    }
+  }, function () {
+    resetBtn(btn);
+    showToast('Error', 'Gagal menyimpan perubahan.', 'danger');
+  });
 }

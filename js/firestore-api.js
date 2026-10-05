@@ -281,7 +281,7 @@ const AKSI_MENGUBAH = {
   addFasilitasi: 'fasilitasi',
   addPrestasi: 'prestasi', updatePrestasi: 'prestasi', deletePrestasi: 'prestasi',
   addLegalitas: 'legalitas', updateLegalitas: 'legalitas', deleteLegalitas: 'legalitas',
-  uploadLaporanCSR: 'laporanCsr', deleteLaporanCSR: 'laporanCsr',
+  uploadLaporanCSR: 'laporanCsr', updateLaporanCSR: 'laporanCsr', deleteLaporanCSR: 'laporanCsr',
   updateUser: 'users', setStatusAkses: 'users', deleteUser: 'users', updateProfil: 'users',
   setClosing: 'closing', bukaClosing: 'closing',
   setConfig: 'config', setPeriodeAktif: 'config'
@@ -665,6 +665,22 @@ async function jalankanAksiFirestore(action, a) {
       });
       hapusCacheFS('laporanCsr');
       return suksesFS(null, 'Laporan CSR berhasil diunggah.');
+    }
+
+    case 'updateLaporanCSR': {
+      // Hanya KETERANGAN yang diubah — berkas di Drive tidak disentuh,
+      // sehingga fileURL dan fileID tetap menunjuk berkas yang sama.
+      const r = a[0] || {};
+      if (!r.ID) return gagalFS('ID laporan tidak ditemukan.');
+      await db.collection('laporanCsr').doc(r.ID).set({
+        bulan: r.Bulan || '',
+        tahun: Number(r.Tahun) || new Date().getFullYear(),
+        kategori: r.Kategori || 'Lainnya',
+        namaFile: r.NamaFile || '',
+        deskripsi: r.DeskripsiLaporan || '',
+        status: r.Status || 'Final'
+      }, { merge: true });
+      return suksesFS(r, 'Keterangan laporan berhasil diperbarui.');
     }
 
     case 'deleteLaporanCSR': {
