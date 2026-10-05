@@ -1621,7 +1621,7 @@ function renderLaporanCsr(rows, isAdmin, tahunFilter) {
           <div class="f-actions">
             <button class="btn btn-outline btn-sm" onclick="previewFile('${f.FileURL}','${esc(f.NamaFile)}',true,'${f.FileID}')"><i class="bi bi-eye"></i> Baca PDF</button>
             <a class="btn btn-primary btn-sm" href="${f.FileURL}" target="_blank"><i class="bi bi-download"></i> Unduh</a>
-            ${isAdmin ? `<button class="btn btn-outline btn-sm" onclick='formUbahLaporan(${JSON.stringify(f)})'><i class="bi bi-pencil"></i> Ubah</button>` : ''}
+            ${isAdmin ? `<button class="btn btn-outline btn-sm" onclick="formUbahLaporan('${esc(f.ID)}')"><i class="bi bi-pencil"></i> Ubah</button>` : ''}
             ${isAdmin ? `<button class="btn btn-danger btn-sm" onclick="hapusLaporan('${f.ID}')"><i class="bi bi-trash"></i></button>` : ''}
           </div>
         </div>`).join('') : `<div class="table-empty" style="grid-column:1/-1;"><i class="bi bi-file-earmark-x"></i>${
@@ -1668,18 +1668,16 @@ async function simpanUploadLaporan() {
       if (res.success) {
         showToast('Berhasil', 'File laporan CSR berhasil diupload.', 'success');
         closeModal('modalGeneric');
-        // PENTING: masukkan LANGSUNG ke cache lokal — JANGAN panggil ulang
-        // loadLaporanCsrAdmin() begitu saja, karena sekarang fungsi itu
-        // memakai cache yang sudah ada (yang belum berisi file baru ini).
-        if (!AppState.cache.laporanCsr) AppState.cache.laporanCsr = [];
-        AppState.cache.laporanCsr.push({
-          ID: res.data && res.data.id ? res.data.id : '',
-          Bulan: meta.Bulan, Tahun: meta.Tahun, NamaFile: namaFile,
-          FileURL: res.data ? res.data.fileUrl : '', FileID: res.data ? res.data.fileId : '',
-          DeskripsiLaporan: meta.DeskripsiLaporan, TanggalUpload: new Date(),
-          DiuploadOleh: meta.DiuploadOleh, Status: meta.Status, Catatan: ''
-        });
-        if (AppState.currentSection === 'laporanCsr') renderLaporanCsr(AppState.cache.laporanCsr, true, _laporanCsrTahun);
+
+        // Ambil ULANG dari server, jangan menyusun kartunya sendiri.
+        //
+        // Dulu kartu dibuat manual di sini. Cara itu rapuh: setiap kali ada
+        // kolom baru (seperti Kategori) kolomnya hilang sampai halaman
+        // dimuat ulang, dan ID serta tautan berkasnya pun tidak terisi —
+        // sehingga tombol Baca, Unduh, dan Ubah pada kartu itu tidak
+        // berfungsi, padahal tampilannya terlihat normal.
+        AppState.cache.laporanCsr = null;
+        if (AppState.currentSection === 'laporanCsr') loadLaporanCsrAdmin();
       }
       else showToast('Gagal', res.message, 'danger');
     }, () => {
@@ -2269,7 +2267,16 @@ function gantiKategoriLaporanCsr(kategori) {
  * yang salah, lebih jelas mengunggah ulang lalu menghapus yang lama,
  * supaya tidak ada tautan yang menunjuk berkas berbeda dari keterangannya.
  */
-function formUbahLaporan(f) {
+function formUbahLaporan(idLaporan) {
+  // Datanya diambil dari cache berdasarkan ID, bukan diselipkan ke dalam
+  // atribut onclick. Menempelkan objek JSON di atribut HTML mudah rusak
+  // begitu deskripsinya memuat tanda kutip — dan kerusakannya tidak
+  // kelihatan sampai laporan tertentu saja yang gagal dibuka.
+  const f = (AppState.cache.laporanCsr || []).find(function (x) {
+    return String(x.ID) === String(idLaporan);
+  });
+  if (!f) { showToast('Gagal', 'Data laporan tidak ditemukan. Muat ulang halaman.', 'danger'); return; }
+
   const body = `
     <div class="d-flex align-center gap-2 mb-3" style="background:var(--canvas);padding:10px 12px;border-radius:8px;">
       <i class="bi bi-file-earmark-pdf-fill" style="color:var(--pemula-text);font-size:18px;"></i>
@@ -2294,7 +2301,7 @@ function formUbahLaporan(f) {
   const footer = `<button class="btn btn-outline" onclick="closeModal('modalGeneric')">Batal</button>
     <button class="btn btn-primary" id="btnUbahLap" onclick="simpanUbahLaporan('${esc(f.ID)}')">
       <i class="bi bi-check-lg"></i> Simpan Perubahan</button>`;
-  openModal('modalGeneric', 'Ubah Keterangan Laporan', body, footer);
+  openFormModal('Ubah Keterangan Laporan', body, footer);
 }
 
 function simpanUbahLaporan(id) {
