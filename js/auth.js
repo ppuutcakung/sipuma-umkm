@@ -186,6 +186,30 @@ function tampilkanHalamanLogin() {
   const lo = document.getElementById('loadingOverlay'); if (lo) lo.style.display = 'none';
   document.getElementById('loginPage').style.display = 'flex';
   document.getElementById('appBody').classList.remove('ready');
+  panaskanServer();
+}
+
+/**
+ * Panaskan server GAS begitu kartu login tampil.
+ *
+ * Bagian paling lambat saat login adalah "cold start" Apps Script: bila
+ * lama tidak dipakai, permintaan pertama harus menunggu server disiapkan
+ * dulu — 1 sampai 3 detik sendiri. Dengan mengirim satu permintaan ringan
+ * saat kartu login muncul, server sudah siap pada saat pengguna selesai
+ * mengetik username dan password.
+ *
+ * Sengaja tidak ditunggu dan kegagalannya diabaikan: ini hanya pemanasan,
+ * tidak boleh menghambat atau menggagalkan apa pun.
+ */
+let _sudahPanaskan = false;
+function panaskanServer() {
+  if (_sudahPanaskan) return;
+  if (!GAS_URL || GAS_URL === 'GANTI_DENGAN_URL_EXEC_ANDA') return;
+  _sudahPanaskan = true;
+  try {
+    // doGet hanya mengembalikan status layanan — ringan dan tanpa token.
+    fetch(GAS_URL, { method: 'GET', redirect: 'follow' }).catch(function () {});
+  } catch (e) { /* diabaikan dengan sengaja */ }
 }
 
 function masukKeAplikasi() {

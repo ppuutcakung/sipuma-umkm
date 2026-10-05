@@ -8,10 +8,12 @@
 //
 // Kalau baris ini masih berisi 'GANTI_DENGAN_URL_EXEC_ANDA', aplikasi akan
 // menampilkan peringatan dan tidak akan mencoba menghubungi server.
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbw96R4kj6zWvXG74W7S50gNWdWSs9u-gMVKslPXn7rIxmaPm4JlT5ccRAARtTEeojQjpg/exec';
+const GAS_URL = 'GANTI_DENGAN_URL_EXEC_ANDA';
 
 // ── Konstanta aplikasi (disamakan dengan backend) ──
 const SEKTOR_LIST = ['Kuliner', 'Kerajinan', 'Pertanian', 'Manufaktur'];
+
+const KATEGORI_LAPORAN = ['AP-AR & KPI', 'Hasil SROI', 'UMKM goes to Vendor', 'Lainnya'];
 
 const BULAN_LIST = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
 

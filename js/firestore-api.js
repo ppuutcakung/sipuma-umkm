@@ -194,6 +194,7 @@ function legalitasKeLama(l) {
 function laporanKeLama(l) {
   return {
     ID: l._id, Bulan: l.bulan, Tahun: l.tahun, NamaFile: l.namaFile,
+    Kategori: l.kategori || 'Lainnya',
     FileURL: l.fileURL, FileID: l.fileID, DeskripsiLaporan: l.deskripsi,
     Status: l.status, DiuploadOleh: l.diuploadOleh, TanggalUpload: l.tanggalUpload
   };
@@ -653,6 +654,7 @@ async function jalankanAksiFirestore(action, a) {
         cabang: cab,
         bulan: meta.Bulan || '',
         tahun: Number(meta.Tahun) || new Date().getFullYear(),
+        kategori: meta.Kategori || 'Lainnya',
         namaFile: up.data.namaFile || a[1],
         fileURL: up.data.fileURL,
         fileID: up.data.fileId,

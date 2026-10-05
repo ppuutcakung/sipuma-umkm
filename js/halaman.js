@@ -454,7 +454,17 @@ function renderRekapOmset(tahun, halaman) {
     const target = o ? Number(o.TargetOmsetTahunan) || 0 : 0;
     const realisasi = o ? Number(o.TotalRealisasi) || 0 : 0;
     const persen = target > 0 ? Math.round((realisasi / target) * 1000) / 10 : 0;
-    return { NamaUMKM: u.NamaUMKM, KodeUnik: u.KodeUnik, target, realisasi, persen, sudahIsiTarget: !!(o && target > 0) };
+    // Bulan terakhir yang diisi = bulan TERAKHIR yang nilainya di atas nol.
+    // Ditelusuri mundur dari Desember agar bulan kosong di tengah tahun
+    // tidak dianggap sebagai akhir pengisian.
+    let bulanTerakhir = '';
+    if (o) {
+      for (let i = BULAN_LIST.length - 1; i >= 0; i--) {
+        if ((Number(o[BULAN_LIST[i]]) || 0) > 0) { bulanTerakhir = BULAN_LIST[i]; break; }
+      }
+    }
+    return { NamaUMKM: u.NamaUMKM, KodeUnik: u.KodeUnik, target, realisasi, persen,
+             bulanTerakhir, sudahIsiTarget: !!(o && target > 0) };
   }).sort((a, b) => b.realisasi - a.realisasi);
 
   const totalHalaman = Math.max(1, Math.ceil(gabungan.length / REKAP_OMSET_PER_HALAMAN));
@@ -466,14 +476,17 @@ function renderRekapOmset(tahun, halaman) {
     <div class="table-card">
       <div style="overflow-x:auto;">
       <table class="sipuma-table">
-        <thead><tr><th>Nama UMKM</th><th>Target Omset</th><th>Total Omset (YTD)</th><th>Persentase Pencapaian</th></tr></thead>
+        <thead><tr><th>Nama UMKM</th><th>Target Omset</th><th>Total Omset (YTD)</th><th>Persentase Pencapaian</th><th>Terakhir Input</th></tr></thead>
         <tbody>${rows.length ? rows.map(r => `
           <tr>
             <td><b>${esc(r.NamaUMKM)}</b></td>
             <td>${r.sudahIsiTarget ? formatRupiahFull(r.target) : `<span class="text-muted" style="font-style:italic;">Belum diisi UMKM</span>`}</td>
             <td>${formatRupiahFull(r.realisasi)}</td>
             <td>${r.sudahIsiTarget ? `<span class="status-pill ${r.persen >= 100 ? 'tercapai' : 'belumtercapai'}"><span class="dot"></span>${r.persen}%</span>` : '-'}</td>
-          </tr>`).join('') : `<tr><td colspan="4"><div class="table-empty"><i class="bi bi-inbox"></i>Belum ada data UMKM.</div></td></tr>`}</tbody>
+            <td>${r.bulanTerakhir
+              ? `<b>${esc(r.bulanTerakhir)}</b>`
+              : `<span class="text-muted" style="font-style:italic;font-size:11.5px;">Belum ada</span>`}</td>
+          </tr>`).join('') : `<tr><td colspan="5"><div class="table-empty"><i class="bi bi-inbox"></i>Belum ada data UMKM.</div></td></tr>`}</tbody>
       </table>
       </div>
     </div>
@@ -1503,11 +1516,11 @@ function filterPerforma(bulan, kategori) {
 // ════════════════════════════════════════════════════════
 function loadLaporanCsrAdmin() {
   const sec = AppState.currentSection;
-  if (AppState.cache.laporanCsr) { renderLaporanCsr(AppState.cache.laporanCsr, true); return; }
+  if (AppState.cache.laporanCsr) { renderLaporanCsr(AppState.cache.laporanCsr, true, _laporanCsrTahun); return; }
   panggilServerAman('getAllLaporanCSR', [], (res) => {
     if (AppState.currentSection !== sec) return;
     AppState.cache.laporanCsr = res.success ? parseJsonAman(res.data, []) : [];
-    renderLaporanCsr(AppState.cache.laporanCsr, true);
+    renderLaporanCsr(AppState.cache.laporanCsr, true, _laporanCsrTahun);
   }, () => {
     if (AppState.currentSection !== sec) return;
     document.getElementById('app-container').innerHTML = `<div class="panel text-center" style="padding:60px 20px;"><i class="bi bi-wifi-off" style="font-size:36px;color:var(--border-strong);"></i><p class="mt-3 text-muted">Gagal memuat laporan CSR.</p><button class="btn btn-primary mt-2" onclick="loadLaporanCsrAdmin()">Coba Lagi</button></div>`;
@@ -1547,7 +1560,21 @@ function renderLaporanCsr(rows, isAdmin, tahunFilter) {
   const tahunAktif = tahunFilter !== undefined && tahunFilter !== null && tahunFilter !== ''
     ? Number(tahunFilter) : '';
   rows = tahunAktif ? semua.filter(f => Number(f.Tahun) === tahunAktif) : semua;
+
+  // Saringan kategori — disimpan di luar fungsi agar tidak hilang saat
+  // tahunnya diganti, dan sebaliknya.
+  if (_laporanCsrKategori) rows = rows.filter(f => (f.Kategori || 'Lainnya') === _laporanCsrKategori);
   _laporanCsrIsAdmin = isAdmin;
+
+  // Jumlah per kategori ditampilkan di pilihannya, supaya terlihat
+  // kategori mana yang sudah terisi tanpa perlu membukanya satu per satu.
+  const dasar = tahunAktif ? semua.filter(f => Number(f.Tahun) === tahunAktif) : semua;
+  const jumlahKategori = {};
+  KATEGORI_LAPORAN.forEach(k => { jumlahKategori[k] = 0; });
+  dasar.forEach(f => {
+    const k = f.Kategori || 'Lainnya';
+    if (jumlahKategori[k] !== undefined) jumlahKategori[k]++;
+  });
 
   const filterHtml =
     `<div class="d-flex gap-2 align-center" style="flex-wrap:wrap;">
@@ -1555,6 +1582,11 @@ function renderLaporanCsr(rows, isAdmin, tahunFilter) {
       <select class="form-select" style="width:auto;height:34px;" onchange="gantiTahunLaporanCsr(this.value)">
         <option value="">Semua Tahun</option>
         ${daftarTahun.map(y => `<option value="${y}"${y === tahunAktif ? ' selected' : ''}>${y}</option>`).join('')}
+      </select>
+      <label class="form-label mb-0" style="white-space:nowrap;">Kategori</label>
+      <select class="form-select" style="width:auto;height:34px;" onchange="gantiKategoriLaporanCsr(this.value)">
+        <option value="">Semua Kategori (${dasar.length})</option>
+        ${KATEGORI_LAPORAN.map(k => `<option value="${esc(k)}"${k === _laporanCsrKategori ? ' selected' : ''}>${esc(k)} (${jumlahKategori[k]})</option>`).join('')}
       </select>
       ${isAdmin ? `<button class="btn btn-primary" onclick="formUploadLaporan()"><i class="bi bi-upload"></i> Upload Baru</button>` : ''}
     </div>`;
@@ -1569,7 +1601,8 @@ function renderLaporanCsr(rows, isAdmin, tahunFilter) {
             <div class="f-icon"><i class="bi bi-file-earmark-pdf-fill"></i></div>
             <div style="flex:1;">
               <div class="d-flex flex-between"><div class="f-name">${esc(f.NamaFile)}</div><span class="status-pill ${f.Status === 'Final' ? 'final' : 'draft'}"><span class="dot"></span>${esc(f.Status)}</span></div>
-              <div class="f-meta">${esc(f.Bulan)} ${esc(f.Tahun)} • Diupload ${formatTgl(f.TanggalUpload)} oleh ${esc(f.DiuploadOleh)}</div>
+              <div class="mt-1"><span class="status-pill" style="font-size:10.5px;background:var(--madya-bg);color:var(--madya-text);"><i class="bi bi-tag-fill"></i> ${esc(f.Kategori || 'Lainnya')}</span></div>
+              <div class="f-meta mt-1">${esc(f.Bulan)} ${esc(f.Tahun)} • Diupload ${formatTgl(f.TanggalUpload)} oleh ${esc(f.DiuploadOleh)}</div>
               <div class="text-muted mt-2" style="font-size:12px;">${esc(f.DeskripsiLaporan) || ''}</div>
             </div>
           </div>
@@ -1578,7 +1611,8 @@ function renderLaporanCsr(rows, isAdmin, tahunFilter) {
             <a class="btn btn-primary btn-sm" href="${f.FileURL}" target="_blank"><i class="bi bi-download"></i> Unduh</a>
             ${isAdmin ? `<button class="btn btn-danger btn-sm" onclick="hapusLaporan('${f.ID}')"><i class="bi bi-trash"></i></button>` : ''}
           </div>
-        </div>`).join('') : `<div class="table-empty" style="grid-column:1/-1;"><i class="bi bi-file-earmark-x"></i>Belum ada laporan diupload.</div>`}
+        </div>`).join('') : `<div class="table-empty" style="grid-column:1/-1;"><i class="bi bi-file-earmark-x"></i>${
+        _laporanCsrKategori ? 'Belum ada laporan pada kategori ini.' : 'Belum ada laporan diupload.'}</div>`}
     </div>
   `;
 }
@@ -1609,6 +1643,7 @@ async function simpanUploadLaporan() {
     const base64 = await readFileAsBase64(file);
     const meta = {
       Bulan: document.getElementById('lapBulan').value, Tahun: Number(document.getElementById('lapTahun').value),
+      Kategori: document.getElementById('lapKategori').value,
       DeskripsiLaporan: document.getElementById('lapDeskripsi').value.trim(),
       Status: document.getElementById('lapStatus').value, DiuploadOleh: AppState.session.username
     };
@@ -1629,7 +1664,7 @@ async function simpanUploadLaporan() {
           DeskripsiLaporan: meta.DeskripsiLaporan, TanggalUpload: new Date(),
           DiuploadOleh: meta.DiuploadOleh, Status: meta.Status, Catatan: ''
         });
-        if (AppState.currentSection === 'laporanCsr') renderLaporanCsr(AppState.cache.laporanCsr, true);
+        if (AppState.currentSection === 'laporanCsr') renderLaporanCsr(AppState.cache.laporanCsr, true, _laporanCsrTahun);
       }
       else showToast('Gagal', res.message, 'danger');
     }, () => {
@@ -1646,7 +1681,7 @@ function hapusLaporan(id) {
       if (res.success) {
         showToast('Berhasil', res.message, 'success');
         if (AppState.cache.laporanCsr) AppState.cache.laporanCsr = AppState.cache.laporanCsr.filter(r => r.ID !== id);
-        if (AppState.currentSection === 'laporanCsr') renderLaporanCsr(AppState.cache.laporanCsr, true);
+        if (AppState.currentSection === 'laporanCsr') renderLaporanCsr(AppState.cache.laporanCsr, true, _laporanCsrTahun);
       }
       else showToast('Gagal', res.message, 'danger');
     }, () => {
@@ -2033,9 +2068,14 @@ function ubahStatusAktifUMKM(kodeUnik, jadikanAktif) {
 
 
 // ── Filter tahun pada Laporan CSR ──
+let _laporanCsrKategori = '';
+let _laporanCsrTahun = '';
 let _laporanCsrIsAdmin = true;
 function gantiTahunLaporanCsr(tahun) {
-  renderLaporanCsr(AppState.cache.laporanCsr || [], _laporanCsrIsAdmin, tahun);
+  // Tahun diingat supaya saringan kategori tidak menghapusnya, dan
+  // sebaliknya — keduanya bisa dipakai bersamaan.
+  _laporanCsrTahun = tahun || '';
+  renderLaporanCsr(AppState.cache.laporanCsr || [], _laporanCsrIsAdmin, _laporanCsrTahun);
 }
 
 // ════════════════════════════════════════════════════════
@@ -2198,3 +2238,10 @@ function resetPasswordUser(username) {
     }, 'Ya, Ganti Password');
 }
 
+
+
+/** Ganti saringan kategori pada Laporan CSR. */
+function gantiKategoriLaporanCsr(kategori) {
+  _laporanCsrKategori = kategori || '';
+  renderLaporanCsr(AppState.cache.laporanCsr || [], _laporanCsrIsAdmin, _laporanCsrTahun);
+}

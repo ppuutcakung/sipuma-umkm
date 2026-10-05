@@ -242,6 +242,12 @@ function eksporRekapOmset(format) {
 
   const baris = umkmAktifSaja.map(function (u) {
     const o = omsetTh.find(function (r) { return r.IDUMKM === u.KodeUnik; });
+    let bulanTerakhir = '';
+    if (o) {
+      for (let i = BULAN_LIST.length - 1; i >= 0; i--) {
+        if ((Number(o[BULAN_LIST[i]]) || 0) > 0) { bulanTerakhir = BULAN_LIST[i]; break; }
+      }
+    }
     const target = o ? (Number(o.TargetOmsetTahunan) || 0) : 0;
     const real = o ? (Number(o.TotalRealisasi) || 0) : 0;
     return {
@@ -250,16 +256,17 @@ function eksporRekapOmset(format) {
       target: target,
       real: real,
       persen: target ? Math.round(real / target * 100) + '%' : '-',
-      status: o ? (o.StatusTarget || '-') : 'Belum ada data'
+      status: o ? (o.StatusTarget || '-') : 'Belum ada data',
+      bulanTerakhir: bulanTerakhir || 'Belum ada'
     };
   }).sort(function (a, b) { return b.real - a.real; })   // omset tertinggi di atas
     .map(function (r, i) {
       return [i + 1, r.nama, r.sektor, formatRupiahFull(r.target),
-              formatRupiahFull(r.real), r.persen, r.status];
+              formatRupiahFull(r.real), r.persen, r.status, r.bulanTerakhir];
     });
 
-  const kolom = ['No', 'Nama UMKM', 'Sektor', 'Target Omset', 'Total Realisasi', 'Capaian (%)', 'Status'];
-  const lebar = [5, 28, 14, 18, 18, 12, 16];
+  const kolom = ['No', 'Nama UMKM', 'Sektor', 'Target Omset', 'Total Realisasi', 'Capaian (%)', 'Status', 'Terakhir Input'];
+  const lebar = [5, 26, 13, 17, 17, 11, 15, 13];
 
   // Omset per sektor — menunjukkan sektor mana yang porsinya terbesar
   const realPerUmkm = {};
