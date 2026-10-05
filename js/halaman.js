@@ -3,7 +3,12 @@
 // Sengaja TIDAK diletakkan di config.js: berkas itu menyimpan GAS_URL
 // milik pemasang, jadi tidak boleh ikut dikirim saat ada pembaruan —
 // menimpanya akan menghapus alamat server dan membuat aplikasi berhenti.
-const KATEGORI_LAPORAN = ['AP-AR & KPI', 'Hasil SROI', 'UMKM goes to Vendor', 'Lainnya'];
+//
+// Namanya DAFTAR_KATEGORI_LAPORAN, bukan KATEGORI_LAPORAN, supaya tidak
+// bentrok dengan sisa deklarasi lama yang mungkin masih ada di config.js.
+// Nama yang sama dideklarasikan dua kali membuat SELURUH berkas ini gagal
+// dimuat — dan gejalanya menyesatkan: seluruh tab tampak "belum terpasang".
+const DAFTAR_KATEGORI_LAPORAN = ['AP-AR & KPI', 'Hasil SROI', 'UMKM goes to Vendor', 'Lainnya'];
 
 // ════════════════════════════════════════════════════════
 // SELURUH HALAMAN SIPUMA (Admin / CSR UT / UMKM)
@@ -1577,7 +1582,7 @@ function renderLaporanCsr(rows, isAdmin, tahunFilter) {
   // kategori mana yang sudah terisi tanpa perlu membukanya satu per satu.
   const dasar = tahunAktif ? semua.filter(f => Number(f.Tahun) === tahunAktif) : semua;
   const jumlahKategori = {};
-  KATEGORI_LAPORAN.forEach(k => { jumlahKategori[k] = 0; });
+  DAFTAR_KATEGORI_LAPORAN.forEach(k => { jumlahKategori[k] = 0; });
   dasar.forEach(f => {
     const k = f.Kategori || 'Lainnya';
     if (jumlahKategori[k] !== undefined) jumlahKategori[k]++;
@@ -1593,7 +1598,7 @@ function renderLaporanCsr(rows, isAdmin, tahunFilter) {
       <label class="form-label mb-0" style="white-space:nowrap;">Kategori</label>
       <select class="form-select" style="width:auto;height:34px;" onchange="gantiKategoriLaporanCsr(this.value)">
         <option value="">Semua Kategori (${dasar.length})</option>
-        ${KATEGORI_LAPORAN.map(k => `<option value="${esc(k)}"${k === _laporanCsrKategori ? ' selected' : ''}>${esc(k)} (${jumlahKategori[k]})</option>`).join('')}
+        ${DAFTAR_KATEGORI_LAPORAN.map(k => `<option value="${esc(k)}"${k === _laporanCsrKategori ? ' selected' : ''}>${esc(k)} (${jumlahKategori[k]})</option>`).join('')}
       </select>
       ${isAdmin ? `<button class="btn btn-primary" onclick="formUploadLaporan()"><i class="bi bi-upload"></i> Upload Baru</button>` : ''}
     </div>`;

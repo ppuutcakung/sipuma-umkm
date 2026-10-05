@@ -868,12 +868,13 @@ async function susunDashboardOrganisasi(tahunDiminta) {
   // kuota harian Firestore.
   const saringTahun = function (q) { return q.where('tahun', '==', tahun); };
 
-  const [umkmR, omsetTh, tkTh, kelasR, fasR, presR, lapR] = await Promise.all([
+  const [umkmR, omsetTh, tkTh, kelasR, fasR, presR, lapR, legR] = await Promise.all([
     ambilKoleksi('umkm'),
     ambilKoleksi('omset', saringTahun, 'th' + tahun),
     ambilKoleksi('tenagaKerja', saringTahun, 'th' + tahun),
     ambilKoleksi('kemandirian'), ambilKoleksi('fasilitasi'),
-    ambilKoleksi('prestasi'), ambilKoleksi('laporanCsr')
+    ambilKoleksi('prestasi'), ambilKoleksi('laporanCsr'),
+    ambilKoleksi('legalitas')
   ]);
 
   const aktif = umkmR.filter(function (u) { return u.statusAktif !== false; });
@@ -937,8 +938,27 @@ async function susunDashboardOrganisasi(tahunDiminta) {
   for (let y = thAktif - 3; y <= thAktif + 1; y++) tahunSet[y] = true;
   tahunSet[tahun] = true;
 
+  // Ringkasan legalitas — hanya milik UMKM aktif, dihitung dengan aturan
+  // yang sama persis seperti di halaman Legalitas agar angkanya sejalan.
+  const legalitas = { Aktif: 0, 'Perlu Diperbarui': 0, Kadaluarsa: 0 };
+  const legalitasAktif = legR.filter(hanyaAktif);
+  legalitasAktif.forEach(function (l) {
+    const s = hitungStatusLegalitasFS(l).Status;
+    if (legalitas[s] !== undefined) legalitas[s]++;
+  });
+  // UMKM yang belum punya catatan legalitas sama sekali — perlu diketahui
+  // karena tidak muncul di tiga angka di atas.
+  const punyaLegalitas = {};
+  legalitasAktif.forEach(function (l) { punyaLegalitas[l.idUmkm] = true; });
+  const tanpaLegalitas = aktif.filter(function (u) {
+    return !punyaLegalitas[u.kodeUnik || u._id];
+  }).length;
+
   return suksesFS({
     tahun: tahun,
+    legalitas: legalitas,
+    totalLegalitas: legalitasAktif.length,
+    umkmTanpaLegalitas: tanpaLegalitas,
     totalUMKM: aktif.length,
     perSektor: perSektor,
     totalOmset: totalOmset,

@@ -154,7 +154,9 @@ function renderDashboardOrganisasi(d, role) {
         '</div>' +
         '<a onclick="navigateTo(\'fileLaporan\')" style="font-size:12.5px;cursor:pointer;display:block;text-align:center;margin-top:12px;">Lihat Semua Laporan <i class="bi bi-arrow-right"></i></a>' +
       '</div>' +
-    '</div>';
+    '</div>' +
+
+    widgetLegalitasOrganisasi(d);
 
   gambarChartOmset(d);
   gambarChartTenagaKerja(d);
@@ -436,3 +438,50 @@ function filterTahunDashboard(d) {
 }
 
 
+
+
+/**
+ * Ringkasan legalitas seluruh UMKM aktif.
+ *
+ * Tiga status dihitung dengan aturan yang sama persis seperti di halaman
+ * Legalitas, jadi angkanya selalu sejalan. Ditambah satu angka keempat:
+ * UMKM yang belum punya catatan legalitas sama sekali — kelompok ini
+ * tidak muncul di ketiga status, padahal justru paling perlu ditindak.
+ */
+function widgetLegalitasOrganisasi(d) {
+  const L = d.legalitas || { Aktif: 0, 'Perlu Diperbarui': 0, Kadaluarsa: 0 };
+  const perluPerhatian = (L['Perlu Diperbarui'] || 0) + (L.Kadaluarsa || 0);
+
+  const kartu = function (judul, angka, ikon, warnaBg, warnaTeks, keterangan) {
+    return '<div style="flex:1;min-width:150px;background:' + warnaBg + ';border-radius:10px;padding:14px 16px;">' +
+      '<div style="font-size:11.5px;color:' + warnaTeks + ';font-weight:600;display:flex;align-items:center;gap:6px;">' +
+        '<i class="bi ' + ikon + '"></i> ' + judul + '</div>' +
+      '<div style="font-size:26px;font-weight:700;color:' + warnaTeks + ';line-height:1.2;margin-top:4px;">' + angka + '</div>' +
+      '<div style="font-size:11px;color:' + warnaTeks + ';opacity:.85;">' + keterangan + '</div>' +
+    '</div>';
+  };
+
+  return '<div class="panel mt-4">' +
+    '<div class="d-flex flex-between align-center" style="flex-wrap:wrap;gap:8px;">' +
+      '<div>' +
+        '<div class="panel-title mb-0">Informasi Legalitas UMKM</div>' +
+        '<div class="panel-sub">' + (d.totalLegalitas || 0) + ' dokumen legalitas dari UMKM aktif</div>' +
+      '</div>' +
+      (perluPerhatian > 0
+        ? '<span class="status-pill blocked"><span class="dot"></span>' + perluPerhatian + ' perlu ditindak</span>'
+        : '<span class="status-pill allowed"><span class="dot"></span>Semua terkendali</span>') +
+    '</div>' +
+    '<div class="d-flex gap-2 mt-3" style="flex-wrap:wrap;">' +
+      kartu('Aktif', L.Aktif || 0, 'bi-patch-check-fill',
+            'var(--pramandiri-bg)', 'var(--pramandiri-text)', 'Masa berlaku masih panjang') +
+      kartu('Perlu Diperbarui', L['Perlu Diperbarui'] || 0, 'bi-exclamation-triangle-fill',
+            'var(--madya-bg)', 'var(--madya-text)', 'Berakhir dalam 1 tahun') +
+      kartu('Kadaluarsa', L.Kadaluarsa || 0, 'bi-x-octagon-fill',
+            'var(--pemula-bg)', 'var(--pemula-text)', 'Sudah lewat masa berlaku') +
+      kartu('Belum Ada Data', d.umkmTanpaLegalitas || 0, 'bi-dash-circle',
+            'var(--canvas)', 'var(--text-muted)', 'UMKM tanpa catatan legalitas') +
+    '</div>' +
+    '<a onclick="navigateTo(\'legalitas\')" style="font-size:12.5px;cursor:pointer;display:block;text-align:center;margin-top:14px;">' +
+      'Buka Legalitas UMKM <i class="bi bi-arrow-right"></i></a>' +
+  '</div>';
+}
