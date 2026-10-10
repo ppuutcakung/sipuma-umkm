@@ -157,7 +157,15 @@ function pasangGayaPeta() {
 
     // Penanda kantor: foto persegi, bukan titik — supaya sekali lihat
     // sudah jelas bahwa itu bukan UMKM.
+    // Kantor ikut berdenyut, dengan aturan yang sama seperti titik UMKM:
+    // gelombang menyebar keluar, sementara fotonya sendiri tetap utuh dan
+    // tidak pernah hilang. Bentuknya mengikuti kotak fotonya, bukan
+    // lingkaran, supaya dari jauh pun sudah ketahuan bahwa itu kantor.
     '.sipuma-kantor{position:relative;width:44px;height:44px;}',
+    '.sipuma-kantor .aura{position:absolute;inset:0;border-radius:12px;background:currentColor;' +
+      'opacity:.45;animation:sipumaDenyutKantor 2.1s ease-out infinite;}',
+    '@keyframes sipumaDenyutKantor{0%{transform:scale(1);opacity:.45}' +
+      '70%{transform:scale(1.85);opacity:0}100%{transform:scale(1.85);opacity:0}}',
     '.sipuma-kantor .bingkai{position:absolute;inset:0;border-radius:10px;overflow:hidden;' +
       'border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.45);background:#fff;' +
       'display:flex;align-items:center;justify-content:center;}',
@@ -170,7 +178,7 @@ function pasangGayaPeta() {
     // Hormati pengguna yang mematikan animasi di pengaturan perangkatnya —
     // sebagian orang pusing atau terganggu oleh gerakan berulang.
     '@media (prefers-reduced-motion: reduce){' +
-      '.sipuma-pin u,.marker-cluster>div{animation:none!important;}}'
+      '.sipuma-pin u,.marker-cluster>div,.sipuma-kantor .aura{animation:none!important;}}'
   ].join('\n');
   document.head.appendChild(el);
 }
@@ -669,8 +677,15 @@ function mulaiPetaSebaran() {
   });
 }
 
-/** Gambar ulang titik sesuai saringan yang sedang dipilih. */
-function terapkanSaringPeta() {
+/**
+ * Gambar ulang titik sesuai saringan yang sedang dipilih.
+ *
+ * `lewatiSorot` dipakai oleh pemanggil yang sudah punya rencana sendiri
+ * untuk pandangan petanya — tanpa itu, dua perintah gerak berebut dalam
+ * waktu yang sama. Pemanggilan dari kotak saringan tidak mengirim apa pun,
+ * jadi perilakunya tetap seperti semula.
+ */
+function terapkanSaringPeta(lewatiSorot) {
   if (!_petaKlaster) return;
   const elS = document.getElementById('petaFilterSektor');
   const elT = document.getElementById('petaFilterStatus');
@@ -720,7 +735,71 @@ function terapkanSaringPeta() {
   const hitung = document.getElementById('petaJumlahTampil');
   if (hitung) hitung.textContent = baris.length;
 
-  sorotHasilSaringan();
+  if (!lewatiSorot) sorotHasilSaringan();
+}
+
+/**
+ * Klik pada penanda kantor: perlihatkan SELURUH wilayah binaannya.
+ *
+ * Aturannya dibuat sama dengan penanda yang lain — diklik berarti
+ * mendekat, bukan sekadar membuka jendela kecil. Bedanya, kantor bukan
+ * satu titik yang perlu didekati, melainkan pusat dari sebarannya. Maka
+ * yang dilakukan: saringan dikosongkan supaya seluruh sektor ikut tampil,
+ * lalu pandangan diatur agar semua titik UMKM — beserta kantornya
+ * sendiri — masuk dalam satu layar.
+ *
+ * Perbesarannya dibatasi sampai tingkat kota/kabupaten, sama seperti saat
+ * menyaring sektor. Tanpa batas itu, cabang yang UMKM-nya kebetulan
+ * berdekatan akan melompat sampai ke tingkat jalan.
+ */
+function petaSorotSeluruhUMKM(lat, lng) {
+  if (!_petaUtama || !_petaKlaster) return;
+
+  // Pengaturan pandangan yang masih mengantre WAJIB dibatalkan. Tanpa ini,
+  // mengklik kantor sesaat setelah mengetik di kotak pencarian akan
+  // tertimpa: antrean lama menyusul 350 ms kemudian, mendapati saringannya
+  // sudah kosong, lalu menarik peta kembali ke seluruh Indonesia.
+  if (_timerSorot) { clearTimeout(_timerSorot); _timerSorot = null; }
+
+  // Saringan dikosongkan dulu — "seluruh sektor" harus benar-benar
+  // seluruhnya, bukan sisa saringan yang kebetulan masih aktif.
+  const elS = document.getElementById('petaFilterSektor');
+  const elT = document.getElementById('petaFilterStatus');
+  const elC = document.getElementById('petaCari');
+  if (elS) elS.value = '';
+  if (elT) elT.value = '';
+  if (elC) elC.value = '';
+
+  // Digambar ulang TANPA pengaturan pandangan bawaannya: tanpa saringan,
+  // fungsi itu akan menarik peta kembali ke seluruh Indonesia — persis
+  // kebalikan dari yang diminta di sini.
+  terapkanSaringPeta(true);
+
+  let kotak = null;
+  try { kotak = _petaKlaster.getBounds(); } catch (e) { kotak = null; }
+
+  // Belum ada satu pun UMKM yang bertitik: tidak ada sebaran untuk
+  // diperlihatkan, jadi kantornya sendiri yang didekati.
+  if (!kotak || !kotak.isValid()) {
+    if (titikSah(lat, lng)) {
+      try { _petaUtama.flyTo([Number(lat), Number(lng)], 15, { duration: 0.7 }); } catch (e) {}
+    }
+    return;
+  }
+
+  // Kantornya ikut dimasukkan ke dalam pandangan, supaya hubungan antara
+  // kantor dan sebaran UMKM-nya terlihat sekaligus.
+  if (titikSah(lat, lng)) {
+    try { kotak = kotak.extend([Number(lat), Number(lng)]); } catch (e) {}
+  }
+
+  try {
+    _petaUtama.flyToBounds(kotak, {
+      duration: 0.8,
+      padding: [70, 70],
+      maxZoom: PETA_ZOOM_WILAYAH
+    });
+  } catch (e) { /* biarkan pada tampilan sekarang */ }
 }
 
 /**
@@ -793,7 +872,8 @@ function gambarPenandaKantor() {
       : '<i class="bi ' + k.ikon + '" style="color:' + warna + ';"></i>';
     const ikon = L.divIcon({
       className: '',
-      html: '<div class="sipuma-kantor">' +
+      html: '<div class="sipuma-kantor" style="color:' + warna + ';">' +
+              '<span class="aura"></span>' +
               '<span class="bingkai" style="box-shadow:0 0 0 2px ' + warna +
                 ',0 2px 8px rgba(0,0,0,.45);">' + gambar + '</span>' +
               '<span class="pita" style="background:' + warna + ';">' + esc(k.label) + '</span>' +
@@ -802,10 +882,18 @@ function gambarPenandaKantor() {
       iconAnchor: [22, 22]
     });
     // zIndexOffset tinggi supaya penanda kantor tidak tertimbun titik UMKM.
-    L.marker([Number(k.lat), Number(k.lng)],
-             { icon: ikon, title: k.nama, zIndexOffset: 1000 })
-      .bindPopup(isiPopupKantor(k), { maxWidth: 240 })
-      .addTo(_lapisanKantor);
+    const m = L.marker([Number(k.lat), Number(k.lng)],
+                       { icon: ikon, title: k.nama, zIndexOffset: 1000 });
+
+    // autoPan dimatikan supaya popup tidak menggeser peta sendiri di tengah
+    // perjalanan zoom di bawah — dua gerakan yang saling tarik membuat peta
+    // tampak melompat-lompat.
+    m.bindPopup(isiPopupKantor(k), { maxWidth: 240, autoPan: false });
+
+    // Klik kantor = perlihatkan seluruh wilayah binaannya.
+    m.on('click', function () { petaSorotSeluruhUMKM(k.lat, k.lng); });
+
+    m.addTo(_lapisanKantor);
   });
   _lapisanKantor.addTo(_petaUtama);
 }
