@@ -543,15 +543,39 @@ async function jalankanAksiFirestore(action, a) {
     // utuh: tidak mungkin tersimpan separuh bila jaringan putus di tengah.
     case 'setKantorPeta': {
       const k = a[0] || {};
+
+      // Stakeholder bisa lebih dari satu — Cakung bermitra dengan UT HO,
+      // YDBA HO, dan lainnya. Disimpan sebagai satu larik, supaya menambah
+      // atau melepas satu stakeholder tidak perlu menambah kolom baru.
+      //
+      // Tiap nilai dibersihkan satu per satu di sini, bukan dipercaya apa
+      // adanya dari layar: Firestore menolak `undefined`, dan satu saja
+      // nilai yang lolos akan menggagalkan SELURUH penulisan.
+      const stk = (Array.isArray(k.stk) ? k.stk : []).slice(0, 12).map(function (s) {
+        s = s || {};
+        return {
+          nama: String(s.nama || ''),
+          lat:  angkaAtauNull(s.lat),
+          lng:  angkaAtauNull(s.lng),
+          foto: String(s.foto || '')
+        };
+      });
+
+      // Kolom bentuk lama tetap ditulis dari stakeholder pertama. Itu jaring
+      // pengaman bila ada peramban yang masih memegang berkas lama: ia akan
+      // melihat satu penanda yang benar, bukan peta tanpa kantor sama sekali.
+      const s0 = stk[0] || { nama: '', lat: null, lng: null, foto: '' };
+
       await db.collection('config').doc(cab).set({
         kantorPpuNama: String(k.ppuNama || ''),
         kantorPpuLat:  angkaAtauNull(k.ppuLat),
         kantorPpuLng:  angkaAtauNull(k.ppuLng),
         kantorPpuFoto: String(k.ppuFoto || ''),
-        kantorStkNama: String(k.stkNama || ''),
-        kantorStkLat:  angkaAtauNull(k.stkLat),
-        kantorStkLng:  angkaAtauNull(k.stkLng),
-        kantorStkFoto: String(k.stkFoto || '')
+        kantorStk:     stk,
+        kantorStkNama: s0.nama,
+        kantorStkLat:  s0.lat,
+        kantorStkLng:  s0.lng,
+        kantorStkFoto: s0.foto
       }, { merge: true });
       return suksesFS(null, 'Titik kantor berhasil disimpan.');
     }
