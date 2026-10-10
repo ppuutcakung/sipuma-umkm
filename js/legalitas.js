@@ -25,6 +25,29 @@ const JENIS_LEGALITAS = [
 
 const LEGALITAS_PER_HALAMAN = 12;
 
+/**
+ * Apakah pengguna yang sedang masuk boleh MENGUBAH data legalitas?
+ *
+ * Halaman legalitas dipakai bersama oleh Admin dan Stakeholder. Isinya sama
+ * persis, yang berbeda hanya wewenangnya: Stakeholder hanya boleh melihat
+ * dan mengekspor. Dengan satu penjaga di sini, tidak perlu ada dua halaman
+ * kembar yang harus dirawat berbarengan — dan tombol Tambah, Ubah, serta
+ * Hapus tidak akan pernah muncul di layar yang tidak berhak.
+ */
+function bolehUbahLegalitas() {
+  const r = (AppState.session || {}).roleFS;
+  return r === 'admin' || r === 'superadmin';
+}
+
+/**
+ * Halaman Legalitas UMKM untuk Stakeholder — hanya lihat dan ekspor.
+ * Memakai pemuat yang sama persis dengan Admin; pembatasannya ada pada
+ * bolehUbahLegalitas() di atas.
+ */
+function loadLegalitasUT() {
+  loadLegalitasAdmin();
+}
+
 /** Kelas warna untuk lencana status legalitas. */
 function kelasStatusLegalitas(status) {
   if (status === 'Aktif') return 'pramandiri';
@@ -73,10 +96,18 @@ function renderLegalitasAdmin() {
   const perbarui = rows.filter(function (l) { return l.Status === 'Perlu Diperbarui'; }).length;
   const lewat    = rows.filter(function (l) { return l.Status === 'Kadaluarsa'; }).length;
 
+  const bolehUbah = bolehUbahLegalitas();
+
   document.getElementById('app-container').innerHTML =
     pageHeader('Kepatuhan Usaha', 'Legalitas', 'UMKM',
-      'Catat dan pantau masa berlaku legalitas UMKM binaan, agar tidak ada yang terlewat kadaluarsa.',
-      '<div class="d-flex gap-2" style="flex-wrap:wrap;">' + tombolEkspor('eksporLegalitas') + '<button class="btn btn-primary" onclick="formLegalitas()"><i class="bi bi-plus-lg"></i> Tambah Legalitas</button></div>') +
+      bolehUbah
+        ? 'Catat dan pantau masa berlaku legalitas UMKM binaan, agar tidak ada yang terlewat kadaluarsa.'
+        : 'Pantau masa berlaku legalitas UMKM binaan. Data di halaman ini hanya dapat dilihat dan diekspor.',
+      '<div class="d-flex gap-2" style="flex-wrap:wrap;">' + tombolEkspor('eksporLegalitas') +
+        (bolehUbah
+          ? '<button class="btn btn-primary" onclick="formLegalitas()"><i class="bi bi-plus-lg"></i> Tambah Legalitas</button>'
+          : '') +
+      '</div>') +
 
     '<div class="grid grid-4 mb-4">' +
       '<div class="kpi-card c-blue"><div class="kpi-label">Total Dokumen</div><div class="kpi-value">' + rows.length + '</div></div>' +
@@ -134,9 +165,15 @@ function renderLegalitasTabel(halaman) {
   const mulai = (halaman - 1) * LEGALITAS_PER_HALAMAN;
   const hal = rows.slice(mulai, mulai + LEGALITAS_PER_HALAMAN);
 
+  // Kolom Aksi hanya ada untuk yang berhak mengubah. Stakeholder tidak
+  // sekadar tombolnya disembunyikan — kolomnya memang tidak digambar.
+  const bolehUbah = bolehUbahLegalitas();
+  const jumlahKolom = bolehUbah ? 6 : 5;
+
   area.innerHTML =
     '<div style="overflow-x:auto;"><table class="sipuma-table">' +
-      '<thead><tr><th>UMKM</th><th>Jenis Legalitas</th><th>Nomor</th><th>Masa Berlaku</th><th>Status</th><th>Aksi</th></tr></thead>' +
+      '<thead><tr><th>UMKM</th><th>Jenis Legalitas</th><th>Nomor</th><th>Masa Berlaku</th><th>Status</th>' +
+        (bolehUbah ? '<th>Aksi</th>' : '') + '</tr></thead>' +
       '<tbody>' +
       (hal.length ? hal.map(function (l) {
         return '<tr>' +
@@ -145,15 +182,18 @@ function renderLegalitasTabel(halaman) {
           '<td>' + esc(l.NomorLegalitas || '-') + '</td>' +
           '<td style="font-size:12px;">' + esc(keteranganMasaBerlaku(l)) + '</td>' +
           '<td>' + lencanaStatusLegalitas(l) + '</td>' +
-          '<td>' +
-            (l.Status !== 'Aktif'
-              ? '<button class="action-icon-btn" style="color:#25D366;border-color:#25D366;" title="Kirim pengingat WhatsApp" onclick="kirimPengingatWA(\'' + esc(l.ID) + '\')"><i class="bi bi-whatsapp"></i></button>'
-              : '') +
-            '<button class="action-icon-btn primary" title="Ubah" onclick=\'formLegalitas(' + JSON.stringify(l) + ')\'><i class="bi bi-pencil"></i></button>' +
-            '<button class="action-icon-btn danger" title="Hapus" onclick="hapusLegalitas(\'' + esc(l.ID) + '\')"><i class="bi bi-trash"></i></button>' +
-          '</td></tr>';
+          (bolehUbah
+            ? '<td>' +
+                (l.Status !== 'Aktif'
+                  ? '<button class="action-icon-btn" style="color:#25D366;border-color:#25D366;" title="Kirim pengingat WhatsApp" onclick="kirimPengingatWA(\'' + esc(l.ID) + '\')"><i class="bi bi-whatsapp"></i></button>'
+                  : '') +
+                '<button class="action-icon-btn primary" title="Ubah" onclick=\'formLegalitas(' + JSON.stringify(l) + ')\'><i class="bi bi-pencil"></i></button>' +
+                '<button class="action-icon-btn danger" title="Hapus" onclick="hapusLegalitas(\'' + esc(l.ID) + '\')"><i class="bi bi-trash"></i></button>' +
+              '</td>'
+            : '') +
+          '</tr>';
       }).join('')
-      : '<tr><td colspan="6"><div class="table-empty"><i class="bi bi-inbox"></i>' +
+      : '<tr><td colspan="' + jumlahKolom + '"><div class="table-empty"><i class="bi bi-inbox"></i>' +
         ((fStatus || kunci) ? 'Tidak ada data yang cocok.' : 'Belum ada data legalitas.') + '</div></td></tr>') +
       '</tbody></table></div>' +
     (totalHalaman > 1

@@ -5,7 +5,28 @@
 /** Bangun sidebar & identitas sesuai peran pengguna yang login. */
 function renderShellPeran() {
   const s = AppState.session;
-  const menu = MENU_PER_ROLE[s.role] || [];
+  const menu = (MENU_PER_ROLE[s.role] || []).slice();
+
+  // Tab "Legalitas UMKM" untuk Stakeholder — hanya lihat dan ekspor.
+  // Disisipkan di sini, bukan di js/config.js, supaya berkas config.js
+  // (yang berisi alamat server milik Anda) tidak perlu ikut diganti setiap
+  // ada menu baru. Diletakkan tepat setelah Fasilitasi Pemasaran.
+  if (s.role === 'UT' && !menu.some(function (m) { return m.id === 'legalitasUT'; })) {
+    const sisip = menu.findIndex(function (m) { return m.id === 'fasilitasiUT'; });
+    const item = { id: 'legalitasUT', label: 'Legalitas UMKM', icon: 'bi-patch-check-fill' };
+    if (sisip > -1) menu.splice(sisip + 1, 0, item); else menu.push(item);
+  }
+
+  // Tab "Peta Sebaran UMKM" untuk Admin dan Stakeholder. Disisipkan tepat
+  // setelah menu data utama masing-masing peran, karena peta adalah cara
+  // lain membaca data yang sama — bukan menu tersendiri di paling bawah.
+  if ((s.role === 'Admin' || s.role === 'UT') &&
+      !menu.some(function (m) { return m.id === 'petaUMKM'; })) {
+    const acuan = (s.role === 'Admin') ? 'masterUmkm' : 'dashboard';
+    const sisip = menu.findIndex(function (m) { return m.id === acuan; });
+    const item = { id: 'petaUMKM', label: 'Peta Sebaran UMKM', icon: 'bi-geo-alt-fill', badge: 'Baru' };
+    if (sisip > -1) menu.splice(sisip + 1, 0, item); else menu.push(item);
+  }
 
   document.getElementById('sidebarNav').innerHTML = menu.map(function (m) {
     return '<li><a class="nav-link" data-section="' + m.id + '" onclick="navigateTo(\'' + m.id + '\')">' +
@@ -115,6 +136,8 @@ function navigateTo(sectionId) {
       case 'omsetUT':            cekTersedia(window.loadOmsetUT, 'Omset UMKM'); break;
       case 'tenagaKerjaUT':      cekTersedia(window.loadTenagaKerjaUT, 'Tenaga Kerja UMKM'); break;
       case 'fasilitasiUT':       cekTersedia(window.loadFasilitasiUT, 'Fasilitasi Pemasaran UMKM'); break;
+      case 'legalitasUT':        cekTersedia(window.loadLegalitasUT, 'Legalitas UMKM'); break;
+      case 'petaUMKM':           cekTersedia(window.loadPetaUMKM, 'Peta Sebaran UMKM'); break;
       case 'performaTerbaik':    cekTersedia(window.loadPerformaTerbaik, 'Performa UMKM Terbaik'); break;
 
       // ── UMKM ──
@@ -570,7 +593,13 @@ async function inisialisasiSipuma() {
           role: roleKeLama(k.role),   // untuk menu & halaman
           roleFS: k.role,             // untuk Firestore
           cabang: k.cabang, idUmkm: k.idUmkm,
-          fotoURL: tersimpan.fotoURL || '', alamat: tersimpan.alamat || ''
+          fotoURL: tersimpan.fotoURL || '', alamat: tersimpan.alamat || '',
+          // Sesi GAS ikut dipulihkan. Tanpa baris ini, sesi yang sudah
+          // diterbitkan hilang setiap kali halaman dimuat ulang, sehingga
+          // unggahan BERKAS berikutnya harus menerbitkan sesi baru dulu —
+          // satu perjalanan tambahan ke server yang membuat unggahan
+          // pertama sesudah muat ulang terasa jauh lebih lama.
+          tokenGas: tersimpan.tokenGas || ''
         };
         if (k.role === 'stakeholder' || k.role === 'superadmin') {
           await muatDaftarCabang();

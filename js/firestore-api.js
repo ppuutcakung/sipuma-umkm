@@ -18,7 +18,7 @@
 // boleh) dikerjakan langsung dari browser.
 const AKSI_LEWAT_GAS = [
   'login', 'loginFirebase',
-  'buatKredensialUMKM', 'hapusKredensial',
+  'buatKredensialUMKM', 'hapusKredensial', 'pindahKredensial',
   'resetPassword',
   'uploadFoto',                          // foto → Google Drive
   'unggahBerkasLaporan', 'hapusBerkasLaporan',
@@ -63,7 +63,19 @@ function saringPeran(q) {
 // kembali, seluruh koleksi dibaca ulang dari Firestore — boros kuota dan
 // tidak ada gunanya karena datanya belum tentu berubah.
 const _cacheFS = {};
-const CACHE_UMUR_MS = 90 * 1000;
+
+// Umur cache dinaikkan dari 90 detik menjadi 5 menit.
+//
+// Pada paket gratis Firebase, jatah pembacaan per harilah yang paling cepat
+// habis — bukan penulisan. Cache 90 detik terlalu pendek: berpindah tab
+// bolak-balik selama beberapa menit saja sudah membaca ulang seluruh
+// koleksi berkali-kali, padahal datanya tidak berubah sama sekali.
+//
+// Risikonya kecil dan terkendali: setiap perubahan data MEMBATALKAN cache
+// koleksi terkait saat itu juga, jadi orang yang mengubah data selalu
+// melihat hasilnya seketika. Yang mungkin tertunda hanya perubahan yang
+// dibuat orang LAIN di perangkat lain — paling lama 5 menit.
+const CACHE_UMUR_MS = 5 * 60 * 1000;
 
 function kunciCacheFS(nama, extra) {
   return nama + '|' + cabangAktif() + '|' + (extra || '');
@@ -123,17 +135,37 @@ function umkmKeLama(u) {
     ID: u._id, KodeUnik: u.kodeUnik || u._id, NamaUMKM: u.namaUMKM,
     SektorUsaha: u.sektor, Spesialisasi: u.spesialisasi, AlamatUsaha: u.alamat,
     NoHP: u.noHP || '',
+    // Titik lokasi untuk Peta Sebaran. Boleh kosong: UMKM tanpa titik tetap
+    // tampil normal di seluruh halaman lain, hanya belum muncul di peta.
+    Lat: angkaAtauNull(u.lat),
+    Lng: angkaAtauNull(u.lng),
     TanggalBinaan: u.tanggalBinaan, FotoURL: u.fotoURL,
     StatusAktif: u.statusAktif === false ? 'Tidak Aktif' : 'Aktif',
     TerakhirUpdate: u.terakhirUpdate
   };
 }
+
+/**
+ * Angka yang sah, atau null.
+ *
+ * Firestore MENOLAK nilai `undefined` dan menggagalkan seluruh penyimpanan
+ * bila ada satu saja. Karena titik lokasi bersifat opsional, nilainya
+ * disamakan jadi null — bukan dibiarkan undefined.
+ */
+function angkaAtauNull(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return isFinite(n) ? n : null;
+}
+
 function umkmKeBaru(d) {
   return {
     cabang: cabangAktif(),
     kodeUnik: d.KodeUnik, namaUMKM: d.NamaUMKM, sektor: d.SektorUsaha,
     spesialisasi: d.Spesialisasi || '', alamat: d.AlamatUsaha || '',
     noHP: d.NoHP || '',
+    lat: angkaAtauNull(d.Lat),
+    lng: angkaAtauNull(d.Lng),
     tanggalBinaan: d.TanggalBinaan ? new Date(d.TanggalBinaan + (String(d.TanggalBinaan).length === 7 ? '-01' : '')) : new Date(),
     terakhirUpdate: new Date()
   };
@@ -252,12 +284,22 @@ async function panggilAPI(action, args, opsi) {
 
   // Sebagian operasi tetap dilayani GAS
   if (AKSI_LEWAT_GAS.indexOf(action) > -1) {
-    return panggilGAS(action, args, opsi);
+    const lewatGas = await panggilGAS(action, args, opsi);
+    if (lewatGas && lewatGas.success && AKSI_GAS_MENGUBAH[action]) {
+      segarkanSetelahUbah(action);
+    }
+    return lewatGas;
   }
   if (!db) return gagalFS('Firebase belum siap. Muat ulang halaman.');
 
   try {
-    return await jalankanAksiFirestore(action, args);
+    const hasil = await jalankanAksiFirestore(action, args);
+    // Setiap perubahan data langsung terlihat di layar, tanpa perlu pindah
+    // tab atau memuat ulang halaman — berlaku untuk seluruh peran.
+    if (hasil && hasil.success && (AKSI_MENGUBAH[action] || action === 'deleteUMKM')) {
+      segarkanSetelahUbah(action);
+    }
+    return hasil;
   } catch (e) {
     console.error('SIPUMA Firestore (' + action + '):', e);
     if (e.code === 'permission-denied') {
@@ -266,6 +308,14 @@ async function panggilAPI(action, args, opsi) {
     if (e.code === 'unavailable') {
       return { success: false, data: null, gagalKoneksi: true,
                message: 'Tidak dapat terhubung. Periksa koneksi internet Anda.' };
+    }
+    // Jatah harian Firebase habis. Perlu dijelaskan apa adanya: ini bukan
+    // kerusakan dan bukan kesalahan pengguna, dan mencoba berulang kali
+    // justru tidak menolong.
+    if (e.code === 'resource-exhausted') {
+      return gagalFS('Kuota harian Firebase sudah habis untuk hari ini, jadi data ' +
+                     'tidak dapat dibaca atau disimpan sementara waktu. Jatahnya ' +
+                     'dihitung ulang setiap hari; coba lagi nanti.');
     }
     return gagalFS(e.message || 'Terjadi kesalahan.');
   }
@@ -286,6 +336,128 @@ const AKSI_MENGUBAH = {
   setClosing: 'closing', bukaClosing: 'closing',
   setConfig: 'config', setPeriodeAktif: 'config'
 };
+
+// Action lewat GAS yang juga MENGUBAH data. Daftarnya terpisah karena
+// jalurnya berbeda, tetapi akibatnya sama: tampilan wajib disegarkan.
+const AKSI_GAS_MENGUBAH = {
+  uploadFoto: 'users', buatKredensialUMKM: 'users', hapusKredensial: 'users',
+  resetPassword: 'users', resetPasswordFirebase: 'users',
+  unggahBerkasLaporan: 'laporanCsr', hapusBerkasLaporan: 'laporanCsr'
+};
+
+// ════════════════════════════════════════════════════════
+// PENYEGARAN TAMPILAN SETELAH DATA BERUBAH
+// ════════════════════════════════════════════════════════
+// Dulu setiap halaman mengurus penyegarannya sendiri-sendiri. Pola itu
+// rapuh: ada halaman yang lupa mengosongkan cache, ada yang lupa menggambar
+// ulang, dan ada yang memeriksa nama tab yang keliru. Gejalanya selalu sama
+// dan selalu membingungkan — "sudah berhasil tapi tidak berubah di layar,
+// baru muncul setelah pindah tab".
+//
+// Sekarang penyegaran dijamin di SATU tempat: setiap kali ada data yang
+// berubah, cache halaman dikosongkan dan tab yang sedang terbuka digambar
+// ulang. Berlaku untuk semua peran dan semua halaman, tanpa kecuali.
+
+let _timerGambarUlang = null;
+let _tundaGambarUlang = 0;
+
+/** Gambar ulang tab yang sedang terbuka. Panggilan beruntun digabung jadi satu. */
+function jadwalkanGambarUlang(jeda, koleksi) {
+  if (_timerGambarUlang) clearTimeout(_timerGambarUlang);
+  _timerGambarUlang = setTimeout(function () {
+    _timerGambarUlang = null;
+    const seksi = (typeof AppState !== 'undefined') ? AppState.currentSection : null;
+    if (!seksi || typeof navigateTo !== 'function') return;
+
+    // Dua keadaan yang membuat penyegaran DITUNDA, bukan dibatalkan:
+    // formulir yang masih terbuka, dan kursor yang masih berada di salah
+    // satu isian. Menggambar ulang di tengah pengetikan akan menghapus apa
+    // yang belum sempat disimpan. Begitu keduanya selesai, penyegaran yang
+    // tertunda akan menyusul sendiri.
+    const form = document.getElementById('modalGeneric');
+    const fokus = document.activeElement;
+    const wadah = document.getElementById('app-container');
+    const sedangMengetik = fokus && /^(INPUT|SELECT|TEXTAREA)$/.test(fokus.tagName) &&
+                           wadah && wadah.contains(fokus);
+
+    if ((form && form.classList.contains('show')) || sedangMengetik) {
+      if (_tundaGambarUlang < 20) { _tundaGambarUlang++; jadwalkanGambarUlang(1500, koleksi); }
+      return;
+    }
+    _tundaGambarUlang = 0;
+
+    // Cache halaman dikosongkan DI SINI, tepat sebelum digambar ulang —
+    // bukan segera setelah data berubah.
+    //
+    // Ini bukan soal rapi-rapian, melainkan keharusan. Sejumlah halaman
+    // menambahkan baris baru ke cache yang sudah ada ("ambil daftar lama,
+    // tambahkan yang baru"). Kalau cache-nya sudah dikosongkan lebih dulu,
+    // daftar lamanya dianggap kosong — dan tabel berakhir hanya berisi SATU
+    // baris, yaitu yang baru saja dimasukkan. Seluruh data lain seolah
+    // lenyap, padahal di server tidak ada yang hilang sama sekali.
+    kosongkanCacheHalaman(koleksi);
+
+    try { navigateTo(seksi); }
+    catch (e) { console.warn('SIPUMA: gagal menggambar ulang tab —', e); }
+  }, jeda || 350);
+}
+
+// Koleksi mana membatalkan cache halaman yang mana.
+//
+// Dulu SELURUH cache dikosongkan setiap kali ada perubahan apa pun. Itu
+// praktis, tetapi mahal: sekali menyimpan satu angka omset, seluruh koleksi
+// ikut dibaca ulang dari server. Pada paket gratis Firebase yang jatahnya
+// terbatas per hari, pemborosan seperti itu bisa menghabiskan kuota di
+// tengah hari kerja — dan begitu kuotanya habis, SELURUH aplikasi berhenti
+// dengan pesan yang membingungkan.
+const CACHE_HALAMAN_PER_KOLEKSI = {
+  umkm:        ['umkm', 'dashboardOrganisasi'],
+  omset:       ['omsetAll', 'dashboardOrganisasi'],
+  tenagaKerja: ['tenagaKerjaAll', 'tenagaKerjaPerUmkmTahun', 'dashboardOrganisasi'],
+  kemandirian: ['kemandirianAll', 'kemandirianPerUmkm', 'dashboardOrganisasi'],
+  fasilitasi:  ['fasilitasi', 'dashboardOrganisasi'],
+  prestasi:    ['prestasi', 'dashboardOrganisasi'],
+  legalitas:   ['legalitas', 'dashboardOrganisasi'],
+  laporanCsr:  ['laporanCsr'],
+  users:       ['users'],
+  closing:     ['dashboardOrganisasi'],
+  config:      ['dashboardOrganisasi']
+};
+
+// Kunci cache yang berisi peta (bukan daftar) dikosongkan jadi {}, bukan null.
+const CACHE_BERBENTUK_PETA = ['kemandirianPerUmkm', 'tenagaKerjaPerUmkmTahun'];
+
+/** Kosongkan cache halaman untuk satu koleksi saja. null = semuanya. */
+function kosongkanCacheHalaman(koleksi) {
+  if (!AppState || !AppState.cache) return;
+  if (!koleksi) { if (typeof resetCache === 'function') resetCache(); return; }
+  const kunci = CACHE_HALAMAN_PER_KOLEKSI[koleksi];
+  if (!kunci) { if (typeof resetCache === 'function') resetCache(); return; }
+  kunci.forEach(function (k) {
+    AppState.cache[k] = (CACHE_BERBENTUK_PETA.indexOf(k) > -1) ? {} : null;
+  });
+}
+
+/** Jadwalkan penyegaran tampilan setelah data berubah. */
+function segarkanSetelahUbah(action) {
+  // Penghapusan UMKM menyentuh hampir semua koleksi sekaligus, jadi di situ
+  // saja seluruh cache dibersihkan.
+  const koleksi = (action === 'deleteUMKM')
+    ? null
+    : (AKSI_MENGUBAH[action] || AKSI_GAS_MENGUBAH[action] || null);
+
+  // Cache Firestore dikosongkan SESUDAH perubahannya benar-benar jadi.
+  // Pengosongan sebelum perubahan saja tidak cukup: sejumlah operasi
+  // membaca koleksinya dulu (misalnya memeriksa nama yang mirip saat
+  // menambah UMKM), dan pembacaan itu mengisi ulang cache dengan keadaan
+  // SEBELUM perubahan — yang lalu bertahan sampai 90 detik berikutnya.
+  //
+  // Aman dipanggil di sini: cache ini murni salinan data dari server,
+  // tidak ada halaman yang menambahkan baris ke dalamnya.
+  if (typeof hapusCacheFS === 'function') hapusCacheFS(koleksi);
+
+  jadwalkanGambarUlang(null, koleksi);
+}
 
 // Pengisian data hanya untuk UMKM yang berstatus AKTIF.
 const AKSI_WAJIB_UMKM_AKTIF = ['saveOmset', 'saveTenagaKerja', 'saveKemandirian',
@@ -403,7 +575,13 @@ async function jalankanAksiFirestore(action, a) {
       // Kredensial login WAJIB dibuat lewat GAS — koleksi `kredensial`
       // tertutup bagi browser. Tanpa langkah ini, UMKM baru tidak akan
       // pernah bisa login meski akunnya sudah muncul di daftar user.
-      const kred = await panggilGAS('buatKredensialUMKM', [d.NamaUMKM, kode]);
+      // Peran, cabang, dan kode UMKM dikirim SEKALIAN. Sebelumnya GAS
+      // membacanya sendiri dari koleksi `users` yang baru saja ditulis di
+      // atas — bila pembacaan itu meleset, akun login cepatnya terbentuk
+      // tanpa peran, dan login pertama UMKM baru jatuh kembali ke jalur
+      // lama yang lambat. Dikirim langsung begini, peranannya pasti benar.
+      const kred = await panggilGAS('buatKredensialUMKM',
+        [d.NamaUMKM, kode, { role: 'umkm', cabang: cab, idUmkm: kode }]);
       if (!kred || !kred.success) {
         return suksesFS({ id: kode, kodeUnik: kode },
           'UMKM "' + d.NamaUMKM + '" ditambahkan dengan Kode Unik ' + kode + ', ' +
@@ -421,10 +599,46 @@ async function jalankanAksiFirestore(action, a) {
         const bentrok = cariUMKMSerupaFS(d.NamaUMKM, semua.map(umkmKeLama), d.KodeUnik);
         if (bentrok) return gagalFS('Nama terlalu mirip dengan "' + bentrok.NamaUMKM + '" (' + bentrok.KodeUnik + ').');
       }
+      // Nama UMKM sekaligus menjadi username loginnya. Karena itu mengganti
+      // nama di Data Master HARUS diikuti akun loginnya — kalau tidak, UMKM
+      // tetap harus masuk memakai nama lama, dan tidak ada petunjuk apa pun
+      // di layar tentang nama mana yang sebenarnya berlaku.
+      const lamaDoc = await db.collection('umkm').doc(d.KodeUnik).get();
+      const namaLama = lamaDoc.exists ? String(lamaDoc.data().namaUMKM || '') : '';
+      const namaBaru = String(d.NamaUMKM || '').trim();
+
       const patch = umkmKeBaru(d);
       delete patch.cabang;                       // cabang tidak boleh berpindah lewat sini
       await db.collection('umkm').doc(d.KodeUnik).set(patch, { merge: true });
-      return suksesFS(d, 'Profil UMKM berhasil diperbarui.');
+
+      let catatanAkun = '';
+      if (namaLama && namaBaru && namaLama !== namaBaru) {
+        try {
+          const uLama = await db.collection('users').doc(namaLama).get();
+          const dataUser = uLama.exists ? uLama.data() : {
+            role: 'umkm', cabang: cab, statusAkses: 'Allowed',
+            statusAktif: true, fotoURL: '', alamat: ''
+          };
+          dataUser.username = namaBaru;
+          dataUser.idUmkm = dataUser.idUmkm || d.KodeUnik;
+          await db.collection('users').doc(namaBaru).set(dataUser);
+          if (uLama.exists) await db.collection('users').doc(namaLama).delete();
+
+          // Sidik password dipindahkan oleh GAS — koleksi `kredensial`
+          // tertutup bagi browser. Passwordnya sendiri tidak berubah.
+          const pindah = await panggilGAS('pindahKredensial', [namaLama, namaBaru]);
+          catatanAkun = (pindah && pindah.success)
+            ? ' Akun loginnya ikut berganti menjadi "' + namaBaru + '", dengan password yang sama.'
+            : ' TETAPI akun loginnya gagal dipindahkan. Buka Manajemen User → Edit → ' +
+              'Reset Password untuk membereskannya.';
+        } catch (e) {
+          catatanAkun = ' TETAPI akun loginnya gagal dipindahkan (' +
+            (e.message || e.code || 'sebab tidak diketahui') + '). Buka Manajemen User → ' +
+            'Edit → Reset Password untuk membereskannya.';
+        }
+      }
+
+      return suksesFS(d, 'Profil UMKM berhasil diperbarui.' + catatanAkun);
     }
     case 'deleteUMKM': {
       const kode = a[0];
@@ -443,6 +657,28 @@ async function jalankanAksiFirestore(action, a) {
         try { await db.collection('users').doc(nama).delete(); } catch (e) {}
         try { await panggilGAS('hapusKredensial', [nama]); } catch (e) {}
       }
+
+      // Sapuan terakhir: akun mana pun yang masih menunjuk ke kode UMKM ini
+      // ikut dihapus, apa pun namanya.
+      //
+      // Menghapus berdasarkan NAMA saja tidak cukup. Bila nama UMKM-nya
+      // pernah diubah, akun lamanya bisa tertinggal dengan nama yang sudah
+      // tidak dikenal siapa pun — datanya hilang dari Data Master, tetapi
+      // akunnya masih berdiri di Manajemen User tanpa penjelasan. Kode unik
+      // tidak pernah berubah, jadi itulah penanda yang dipakai di sini.
+      try {
+        const sisa = await db.collection('users').where('cabang', '==', cab).get();
+        for (const d of sisa.docs) {
+          const u = d.data() || {};
+          if (String(u.idUmkm || '') === String(kode)) {
+            await d.ref.delete();
+            try { await panggilGAS('hapusKredensial', [d.id]); } catch (e) {}
+          }
+        }
+      } catch (e) {
+        console.warn('SIPUMA: sapuan akun yatim dilewati —', e.code || e.message);
+      }
+
       return suksesFS(null, 'UMKM beserta seluruh riwayatnya berhasil dihapus.');
     }
     case 'setStatusAktifUMKM': {
@@ -646,9 +882,34 @@ async function jalankanAksiFirestore(action, a) {
       // Sebelumnya GAS ikut menulis catatan — tetapi ke Google Sheets,
       // sehingga berkas terunggah namun tidak pernah muncul di aplikasi.
       const meta = a[3] || {};
-      const up = await panggilGAS('unggahBerkasLaporan', [a[0], a[1], a[2]]);
-      if (!up || !up.success || !up.data) {
-        return gagalFS((up && up.message) || 'Berkas gagal diunggah ke Drive.');
+      // Penanda unggahan — sengaja dihitung DARI ISI BERKASNYA, bukan acak.
+      //
+      // Berkas yang sama dengan nama yang sama selalu menghasilkan penanda
+      // yang sama, berapa kali pun pengirimannya diulang. Itulah yang
+      // membuat pengiriman ulang aman: server mengenali bahwa berkas itu
+      // sudah pernah masuk, lalu mengembalikan yang lama alih-alih membuat
+      // salinan baru. Penanda acak tidak bisa dipakai di sini, karena
+      // percobaan ulang dari lapisan atas akan menghasilkan acak yang beda.
+      //
+      // Kode cabang ikut masuk ke dalam penanda. Folder Drive untuk laporan
+      // CSR dipakai BERSAMA oleh semua cabang, jadi tanpa pembeda ini, dua
+      // cabang yang kebetulan mengunggah berkas sama persis dengan nama
+      // sama akan dianggap pengulangan — keduanya menunjuk ke satu berkas
+      // yang sama. Bila salah satu cabang lalu menghapus catatannya,
+      // berkas milik cabang lain ikut hilang.
+      const isi = String(a[0] || '');
+      const kunciUnggah = 'csr|' + cab + '|' + String(a[1] || '') + '|' + isi.length + '|' +
+                          isi.substring(0, 64) + '|' + isi.substring(isi.length - 64);
+
+      const up = await panggilGAS('unggahBerkasLaporan', [a[0], a[1], a[2], kunciUnggah]);
+      // Tautan berkasnya ikut diperiksa, bukan hanya status berhasilnya.
+      // Tanpa pemeriksaan itu, jawaban yang "berhasil" tetapi tanpa tautan
+      // akan diteruskan apa adanya, dan catatannya tersimpan dengan tautan
+      // kosong — berkasnya lalu tidak bisa dibuka siapa pun, padahal di
+      // layar tertulis berhasil.
+      if (!up || !up.success || !up.data || !up.data.fileURL) {
+        return gagalFS((up && up.message) ||
+          'Berkas gagal diunggah ke Drive. Tidak ada yang tersimpan, silakan coba lagi.');
       }
       await db.collection('laporanCsr').add({
         cabang: cab,
@@ -688,7 +949,20 @@ async function jalankanAksiFirestore(action, a) {
       const dok = await db.collection('laporanCsr').doc(a[0]).get();
       const fid = dok.exists ? dok.data().fileID : '';
       await db.collection('laporanCsr').doc(a[0]).delete();
-      if (fid) { try { await panggilGAS('hapusBerkasLaporan', [fid]); } catch (e) {} }
+
+      // Pembersihan berkas di Drive sengaja TIDAK ditunggu, dan hanya
+      // dicoba sekali.
+      //
+      // Catatannya sudah terhapus pada baris di atas, jadi dari sisi
+      // pengguna pekerjaannya memang sudah selesai. Dulu langkah ini
+      // ditunggu dengan tiga kali percobaan; bila Drive sedang lambat,
+      // penghapusan satu berkas bisa memakan hampir satu menit — cukup
+      // lama untuk memicu percobaan ulang dari lapisan di atasnya, yang
+      // lalu berakhir dengan pesan galat padahal berkasnya sudah hilang.
+      if (fid) {
+        panggilGAS('hapusBerkasLaporan', [fid], { percobaan: 1 })
+          .catch(function () { /* berkas yatim di Drive, tidak mengganggu aplikasi */ });
+      }
       return suksesFS(null, 'Laporan CSR berhasil dihapus.');
     }
 
@@ -734,7 +1008,17 @@ async function jalankanAksiFirestore(action, a) {
       if (a[1] === '__KOSONG__') patch.fotoURL = '';
       await db.collection('users').doc(sesi.username).set(patch, { merge: true });
       if (sesi.roleFS === 'umkm' && sesi.idUmkm) {
-        await db.collection('umkm').doc(sesi.idUmkm).set(patch, { merge: true });
+        // Titik lokasi hanya disimpan pada baris UMKM, bukan pada baris
+        // pengguna — baris pengguna tidak ada hubungannya dengan peta.
+        // Argumen ketiga sengaja dibedakan: TIDAK DIKIRIM berarti "jangan
+        // sentuh titiknya", sedangkan null berarti "hapus titiknya".
+        const patchUmkm = Object.assign({}, patch);
+        if (a.length > 2) {
+          const t = a[2];
+          patchUmkm.lat = t ? angkaAtauNull(t.lat) : null;
+          patchUmkm.lng = t ? angkaAtauNull(t.lng) : null;
+        }
+        await db.collection('umkm').doc(sesi.idUmkm).set(patchUmkm, { merge: true });
       }
       return suksesFS(null, 'Profil berhasil diupdate.');
     }
@@ -1113,10 +1397,19 @@ async function panggilGAS(action, args, opsi) {
   if (!GAS_URL || GAS_URL === 'GANTI_DENGAN_URL_EXEC_ANDA') {
     return gagalFS('Alamat server belum dikonfigurasi. Isi GAS_URL di js/config.js.');
   }
+  // Pengguna yang masuk lewat jalur cepat belum punya sesi GAS — sesinya
+  // diterbitkan di sini, sekali, saat pertama kali ada yang membutuhkannya.
+  let tokenGas = (AppState.session || {}).tokenGas || '';
+  if (!tokenGas && typeof pastikanTokenGas === 'function') {
+    tokenGas = await pastikanTokenGas();
+  }
+
   const payload = { action: action, args: args || [] };
-  if (AppState.session && AppState.session.tokenGas) payload.token = AppState.session.tokenGas;
+  if (tokenGas) payload.token = tokenGas;
 
   const maks = opsi.percobaan || 3;
+  let doGetTerulang = false;    // jawaban doGet hanya diulang satu kali
+  let sesiDiperbarui = false;   // sesi GAS hanya diterbitkan ulang sekali
   for (let i = 1; i <= maks; i++) {
     try {
       const res = await fetch(GAS_URL, {
@@ -1126,7 +1419,60 @@ async function panggilGAS(action, args, opsi) {
         redirect: 'follow'
       });
       if (!res.ok) throw new Error('Status ' + res.status);
-      return await res.json();
+      const jawaban = await res.json();
+
+      // ── Sesi berkas kedaluwarsa → terbitkan ulang, lalu coba lagi ──
+      //
+      // Sesi GAS punya masa berlaku sendiri, terpisah dari sesi Firebase.
+      // Dulu sesi itu hanya diterbitkan saat belum ada sama sekali, jadi
+      // begitu masa berlakunya habis tidak ada yang memperbaruinya — dan
+      // setiap unggahan berikutnya ditolak dengan "Sesi Anda sudah
+      // berakhir", bahkan setelah pengguna login ulang berkali-kali.
+      if (jawaban && jawaban.sesiHabis && !sesiDiperbarui) {
+        sesiDiperbarui = true;
+        if (AppState.session) {
+          AppState.session.tokenGas = '';
+          if (typeof simpanSesiLokal === 'function') simpanSesiLokal(AppState.session);
+        }
+        const tokenBaru = (typeof pastikanTokenGas === 'function') ? await pastikanTokenGas() : '';
+        if (tokenBaru) { payload.token = tokenBaru; continue; }
+        return { success: false, data: null,
+                 message: 'Sesi untuk unggah berkas tidak dapat disiapkan. ' +
+                          'Coba muat ulang halaman; bila tetap gagal, periksa kuota ' +
+                          'harian Firebase di Firebase Console → Usage.' };
+      }
+
+      // ── Kuota harian Firebase habis ──
+      // Pesan aslinya berbahasa Inggris dan berbentuk JSON mentah, yang
+      // bagi pengguna tidak ada artinya. Diterjemahkan agar sebabnya jelas,
+      // karena yang diperlukan memang menunggu, bukan mencoba terus.
+      if (jawaban && jawaban.success === false &&
+          /Quota exceeded|RESOURCE_EXHAUSTED/i.test(String(jawaban.message || ''))) {
+        return { success: false, data: null,
+                 message: 'Kuota harian Firebase sudah habis untuk hari ini, jadi ' +
+                          'data tidak dapat dibaca atau disimpan sementara waktu. ' +
+                          'Jatahnya dihitung ulang setiap hari; coba lagi nanti.' };
+      }
+
+      // Kadang Apps Script membalas permintaan POST dengan jawaban doGet:
+      // "SIPUMA API aktif. Gunakan POST untuk seluruh operasi data."
+      // Itu terjadi bila pengalihan internal Google tersesat saat
+      // eksekusinya berjalan lama — paling sering waktu mengunggah berkas.
+      // Jawaban itu bukan hasil yang sah, jadi diulang sekali, bukan
+      // ditampilkan kepada pengguna sebagai pesan gagal yang membingungkan.
+      if (jawaban && jawaban.success === false &&
+          String(jawaban.message || '').indexOf('Gunakan POST') > -1) {
+        if (!doGetTerulang) {
+          doGetTerulang = true;
+          console.warn('SIPUMA: server membalas dengan jawaban doGet — diulang sekali.');
+          await new Promise(function (r) { setTimeout(r, 800); });
+          continue;
+        }
+        return { success: false, data: null,
+                 message: 'Server berkas sedang sibuk dan belum sempat memproses ' +
+                          'permintaan ini. Coba lagi sebentar lagi.' };
+      }
+      return jawaban;
     } catch (e) {
       if (i === maks) {
         return { success: false, data: null, gagalKoneksi: true,

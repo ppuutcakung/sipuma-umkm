@@ -1,0 +1,272 @@
+rules_version = '2';
+
+// ════════════════════════════════════════════════════════
+// SIPUMA — Firestore Security Rules
+// ════════════════════════════════════════════════════════
+// Aturan ini ditegakkan oleh server Google, BUKAN oleh kode aplikasi.
+// Artinya: walau seseorang memakai DevTools, memanggil API langsung, atau
+// mengubah kode di browser, batasan di bawah ini tetap berlaku.
+//
+// Peran & cabang dibaca dari token login (custom claims) yang diterbitkan
+// GAS. Token ditandatangani kunci rahasia server, sehingga isinya tidak
+// dapat dipalsukan pengguna.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Pembantu ──
+    function masuk()   { return request.auth != null; }
+    function klaim()   { return request.auth.token; }
+    function peran()   { return masuk() ? klaim().role : ''; }
+    function cabang()  { return masuk() ? klaim().cabang : ''; }
+    function idUmkm()  { return masuk() ? klaim().idUmkm : ''; }
+
+    function superadmin()  { return peran() == 'superadmin'; }
+    function stakeholder() { return peran() == 'stakeholder'; }
+    function adminCabang() { return peran() == 'admin'; }
+    function umkm()        { return peran() == 'umkm'; }
+
+    // Apakah Admin cabang ini membuka datanya untuk Stakeholder?
+    function dataTerbukaUntukStakeholder(kodeCabang) {
+      return get(/databases/$(database)/documents/config/$(kodeCabang))
+               .data.laporanTerbukaUntukStakeholder == true;
+    }
+
+    // Boleh MELIHAT data sebuah cabang?
+    //  • superadmin & stakeholder : seluruh cabang
+    //  • admin                    : hanya cabangnya sendiri
+    // Stakeholder hanya boleh melihat data sebuah cabang bila Admin
+    // cabang itu MEMBUKA aksesnya. Superadmin & Admin tidak terpengaruh.
+    function bolehLihat(c) {
+      return masuk() && (
+        superadmin()
+        || (stakeholder() && dataTerbukaUntukStakeholder(c))
+        || cabang() == c
+      );
+    }
+
+    // Boleh MELIHAT satu dokumen milik UMKM tertentu?
+    //
+    // PENTING — Firestore memeriksa aturan TANPA membaca dokumen, jadi
+    // setiap saringan yang disebut di sini WAJIB ada juga di query. Karena
+    // itu tiap peran hanya bersandar pada SATU penanda:
+    //   • pengelola : cabang   → query menyaring cabang
+    //   • umkm      : idUmkm   → query menyaring idUmkm
+    // Kode UMKM bersifat unik lintas cabang, jadi memeriksa idUmkm saja
+    // sudah cukup aman untuk peran UMKM.
+    function bolehLihatMilik(c, pemilik) {
+      return masuk() && (
+        superadmin()
+        || (stakeholder() && dataTerbukaUntukStakeholder(c))
+        || (adminCabang() && cabang() == c)
+        || (umkm() && idUmkm() == pemilik)
+      );
+    }
+
+    // Dokumen yang BELUM ADA membuat `resource` kosong. Tanpa penjagaan
+    // ini, sekadar memeriksa "apakah sudah ada closing?" akan ditolak.
+    function belumAda() { return resource == null; }
+
+    // Boleh MENGUBAH data sebuah cabang? Stakeholder sengaja TIDAK bisa —
+    // perannya memang hanya memantau.
+    function bolehUbah(c) {
+      return masuk() && (superadmin() || (adminCabang() && cabang() == c));
+    }
+
+    // Dokumen ini milik UMKM yang sedang login?
+    function milikSaya(idPemilik) {
+      return umkm() && idUmkm() == idPemilik;
+    }
+
+    // ════════════════════════════════════════════════
+    // KREDENSIAL — TERTUTUP SEPENUHNYA
+    // ════════════════════════════════════════════════
+    // Hash password TIDAK BOLEH pernah sampai ke browser, bahkan milik
+    // sendiri. Hanya GAS (lewat service account) yang dapat membacanya,
+    // dan service account memang tidak tunduk pada aturan ini.
+    match /kredensial/{id} {
+      allow read, write: if false;
+    }
+
+    // ════════════════════════════════════════════════
+    // MASTER
+    // ════════════════════════════════════════════════
+    match /cabang/{kode} {
+      allow read:  if masuk();
+      allow write: if superadmin();
+    }
+
+    match /users/{username} {
+      // Daftar pengguna hanya untuk pengelola. UMKM boleh membaca
+      // barisnya sendiri saja (dipakai menampilkan foto & alamat).
+      // Akun Stakeholder sengaja tidak terikat cabang (cabang kosong),
+      // jadi tidak ikut terambil saat Admin menyaring per cabang. Baris
+      // role=='stakeholder' membuat Admin tetap dapat melihat dan
+      // mengelolanya — tanpa membuka akses ke user cabang lain.
+      allow read: if superadmin() || stakeholder()
+                     || (adminCabang() && resource.data.cabang == cabang())
+                     || (adminCabang() && resource.data.role == 'stakeholder')
+                     || (masuk() && request.auth.uid == username);
+      allow create: if superadmin() || adminCabang();
+      // belumAda() di depan: menghapus baris yang memang SUDAH tidak ada
+      // bukanlah pelanggaran hak akses, melainkan pekerjaan yang sudah
+      // selesai. Tanpa penjagaan ini, percobaan ulang yang wajar (misalnya
+      // karena jawaban server terlambat) berakhir dengan pesan "Missing or
+      // insufficient permissions" yang menakutkan, padahal datanya memang
+      // sudah terhapus pada percobaan pertama.
+      allow delete: if belumAda()
+                    || superadmin()
+                    || (adminCabang() && resource.data.cabang == cabang())
+                    || (adminCabang() && resource.data.role == 'umkm');
+      // Pengguna boleh memperbarui profilnya sendiri, TAPI tidak boleh
+      // menaikkan perannya sendiri atau berpindah cabang.
+      allow update: if superadmin()
+                    || (adminCabang() && resource.data.cabang == cabang())
+                    || (adminCabang() && resource.data.role == 'stakeholder')
+                    || (request.auth.uid == username
+                        && request.resource.data.role == resource.data.role
+                        && request.resource.data.cabang == resource.data.cabang
+                        && request.resource.data.statusAkses == resource.data.statusAkses);
+    }
+
+    match /config/{kode} {
+      allow read:  if masuk();
+      allow write: if superadmin() || (adminCabang() && kode == cabang());
+    }
+
+    // ════════════════════════════════════════════════
+    // DATA UMKM
+    // ════════════════════════════════════════════════
+    match /umkm/{kodeUnik} {
+      // UMKM boleh membaca barisnya sendiri; pengelola sesuai cabangnya.
+      allow read:   if belumAda() || bolehLihatMilik(resource.data.cabang, kodeUnik);
+      allow create: if bolehUbah(request.resource.data.cabang);
+      // UMKM boleh memperbarui PROFILNYA SENDIRI — hanya alamat, foto, dan
+      // titik lokasi usahanya di peta.
+      // Tanpa izin ini, mengganti foto profil atau alamat dari akun UMKM
+      // selalu ditolak ("Missing or insufficient permissions"), padahal
+      // tampilannya terlihat berhasil karena perubahannya tersimpan di
+      // layar saja. Daftar kolomnya dikunci ketat: nama, sektor, kode,
+      // cabang, dan status tetap tidak bisa disentuh pemiliknya sendiri.
+      allow update: if (bolehUbah(resource.data.cabang)
+                        && bolehUbah(request.resource.data.cabang))   // cegah pindah cabang diam-diam
+                    || (umkm() && idUmkm() == kodeUnik
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                             .hasOnly(['alamat', 'fotoURL', 'terakhirUpdate', 'lat', 'lng']));
+      allow delete: if belumAda() || bolehUbah(resource.data.cabang);
+    }
+
+    // ════════════════════════════════════════════════
+    // OMSET & TENAGA KERJA — UMKM boleh mengisi miliknya sendiri
+    // ════════════════════════════════════════════════
+    match /omset/{id} {
+      allow read: if belumAda() || bolehLihatMilik(resource.data.cabang, resource.data.idUmkm);
+      allow create, update:
+        if bolehUbah(request.resource.data.cabang)
+           || milikSaya(request.resource.data.idUmkm);
+      allow delete: if belumAda() || bolehUbah(resource.data.cabang);
+    }
+
+    match /tenagaKerja/{id} {
+      allow read: if belumAda() || bolehLihatMilik(resource.data.cabang, resource.data.idUmkm);
+      allow create, update:
+        if bolehUbah(request.resource.data.cabang)
+           || milikSaya(request.resource.data.idUmkm);
+      allow delete: if belumAda() || bolehUbah(resource.data.cabang);
+    }
+
+    // ════════════════════════════════════════════════
+    // DATA YANG HANYA DIISI PENGELOLA
+    // UMKM boleh melihat miliknya, tetapi tidak boleh mengubah apa pun.
+    // ════════════════════════════════════════════════
+    match /kemandirian/{id} {
+      allow read:   if belumAda() || bolehLihatMilik(resource.data.cabang, resource.data.idUmkm);
+      allow create, update: if bolehUbah(request.resource.data.cabang);
+      // PENTING: saat MENGHAPUS tidak ada data masuk, jadi
+      // request.resource bernilai kosong. Memakai `allow write` di sini
+      // membuat penghapusan SELALU ditolak — syaratnya harus memeriksa
+      // `resource` (data yang sudah ada), bukan `request.resource`.
+      allow delete: if belumAda() || bolehUbah(resource.data.cabang);
+    }
+
+    match /fasilitasi/{id} {
+      allow read:   if belumAda() || bolehLihatMilik(resource.data.cabang, resource.data.idUmkm);
+      allow create, update: if bolehUbah(request.resource.data.cabang);
+      // PENTING: saat MENGHAPUS tidak ada data masuk, jadi
+      // request.resource bernilai kosong. Memakai `allow write` di sini
+      // membuat penghapusan SELALU ditolak — syaratnya harus memeriksa
+      // `resource` (data yang sudah ada), bukan `request.resource`.
+      allow delete: if belumAda() || bolehUbah(resource.data.cabang);
+    }
+
+    match /prestasi/{id} {
+      allow read:   if belumAda() || bolehLihatMilik(resource.data.cabang, resource.data.idUmkm);
+      allow create, update: if bolehUbah(request.resource.data.cabang);
+      // PENTING: saat MENGHAPUS tidak ada data masuk, jadi
+      // request.resource bernilai kosong. Memakai `allow write` di sini
+      // membuat penghapusan SELALU ditolak — syaratnya harus memeriksa
+      // `resource` (data yang sudah ada), bukan `request.resource`.
+      allow delete: if belumAda() || bolehUbah(resource.data.cabang);
+    }
+
+    match /legalitas/{id} {
+      allow read:   if belumAda() || bolehLihatMilik(resource.data.cabang, resource.data.idUmkm);
+      allow create, update: if bolehUbah(request.resource.data.cabang);
+      // PENTING: saat MENGHAPUS tidak ada data masuk, jadi
+      // request.resource bernilai kosong. Memakai `allow write` di sini
+      // membuat penghapusan SELALU ditolak — syaratnya harus memeriksa
+      // `resource` (data yang sudah ada), bukan `request.resource`.
+      allow delete: if belumAda() || bolehUbah(resource.data.cabang);
+    }
+
+    // Laporan CSR tidak terikat satu UMKM — seluruh peran boleh melihat
+    // sesuai cabangnya, tetapi hanya pengelola yang boleh mengunggah.
+    // Laporan hanya terbuka bagi Stakeholder bila Admin cabang itu
+    // mengizinkannya. Ditegakkan DI SINI, bukan sekadar disembunyikan di
+    // tampilan — kalau hanya disembunyikan, Stakeholder tetap bisa
+    // membacanya lewat cara lain dan kontrolnya jadi semu.
+    match /laporanCsr/{id} {
+      allow read:   if belumAda()
+                    || superadmin()
+                    || (adminCabang() && resource.data.cabang == cabang())
+                    || (stakeholder() && dataTerbukaUntukStakeholder(resource.data.cabang));
+      allow create, update: if bolehUbah(request.resource.data.cabang);
+      allow delete: if belumAda() || bolehUbah(resource.data.cabang);
+    }
+
+    // ════════════════════════════════════════════════
+    // CLOSING — UMKM boleh mengunci datanya sendiri,
+    // tetapi TIDAK boleh membuka kembali.
+    // ════════════════════════════════════════════════
+    match /closing/{id} {
+      // Dokumen closing sering BELUM ADA — memeriksanya harus tetap boleh.
+      allow read:   if belumAda() || bolehLihat(resource.data.cabang);
+      allow create: if bolehUbah(request.resource.data.cabang)
+                       || (milikSaya(request.resource.data.idUmkm)
+                           && request.resource.data.cabang == cabang());
+      allow update, delete: if bolehUbah(resource.data.cabang);
+    }
+
+    // ════════════════════════════════════════════════
+    // PENANDA PERUBAHAN
+    // ════════════════════════════════════════════════
+    // Satu dokumen berisi kapan data terakhir diubah. Dipakai pencadangan
+    // harian untuk memutuskan perlu berjalan atau tidak — sehingga hari
+    // tanpa perubahan hanya memakan 1 bacaan.
+    //
+    // Isinya bukan data sensitif (hanya stempel waktu), dan setiap
+    // pengguna yang memang boleh mengubah data perlu bisa menandainya.
+    match /meta/{id} {
+      allow read:  if masuk();
+      allow write: if masuk();
+    }
+
+    // ════════════════════════════════════════════════
+    // Apa pun yang tidak disebut di atas: DITOLAK.
+    // Koleksi baru harus didaftarkan secara sadar di berkas ini.
+    // ════════════════════════════════════════════════
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

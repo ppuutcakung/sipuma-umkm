@@ -481,7 +481,12 @@ function widgetLegalitasOrganisasi(d) {
       kartu('Belum Ada Data', d.umkmTanpaLegalitas || 0, 'bi-dash-circle',
             'var(--canvas)', 'var(--text-muted)', 'UMKM tanpa catatan legalitas') +
     '</div>' +
-    '<a onclick="navigateTo(\'legalitas\')" style="font-size:12.5px;cursor:pointer;display:block;text-align:center;margin-top:14px;">' +
+    // Stakeholder diarahkan ke halaman versi hanya-lihat. Sebelumnya tautan
+    // ini membuka halaman versi Admin lengkap dengan tombol Ubah dan Hapus —
+    // tombol yang seharusnya tidak pernah terlihat oleh Stakeholder.
+    '<a onclick="navigateTo(\'' +
+      (((AppState.session || {}).roleFS === 'stakeholder') ? 'legalitasUT' : 'legalitas') +
+      '\')" style="font-size:12.5px;cursor:pointer;display:block;text-align:center;margin-top:14px;">' +
       'Buka Legalitas UMKM <i class="bi bi-arrow-right"></i></a>' +
   '</div>';
 }

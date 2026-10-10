@@ -193,7 +193,9 @@ async function gantiCabang(kode) {
   if (typeof hapusCacheFS === 'function') hapusCacheFS(null);
   resetCache();
 
-  // Konfigurasi juga per cabang (periode aktif, target, nama organisasi)
+  // Konfigurasi juga per cabang (periode aktif, target, nama organisasi,
+  // dan izin akses Stakeholder). Harus dimuat SEBELUM halaman digambar,
+  // karena izin itulah yang menentukan halaman apa yang boleh tampil.
   const cfg = await panggilAPI('getAllConfig', []);
   AppState.config = cfg.success ? (cfg.data || {}) : {};
 
@@ -204,4 +206,147 @@ async function gantiCabang(kode) {
 
   const info = infoCabangAktif();
   showToast('Cabang Berpindah', 'Menampilkan data ' + (info.nama || kode) + '.', 'info');
+}
+
+
+// ════════════════════════════════════════════════════════
+// JALUR CEPAT — LOGIN LANGSUNG KE FIREBASE
+// ════════════════════════════════════════════════════════
+// Firebase Auth mewajibkan email, sementara SIPUMA memakai nama UMKM.
+// Karena itu tiap pengguna diberi email bayangan yang tidak pernah
+// dikirimi apa pun — hanya sebagai penanda di Firebase.
+
+const AUTH_DOMAIN_BAYANGAN = 'sipuma.local';
+
+/** SHA-256 sebuah teks, dalam bentuk heksadesimal. */
+async function sha256Hex(teks) {
+  const data = new TextEncoder().encode(String(teks));
+  const buf = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buf))
+    .map(function (b) { return b.toString(16).padStart(2, '0'); })
+    .join('');
+}
+
+/**
+ * Ubah username jadi email bayangan yang tetap dan unik.
+ *
+ * ⚠️ RUMUS INI HARUS SAMA PERSIS dengan authEmailDariUsername() di
+ *    Auth.gs. Browser dan server menghitungnya masing-masing — bila
+ *    keduanya berbeda satu huruf pun, tidak ada yang bisa masuk lewat
+ *    jalur cepat.
+ */
+async function emailDariUsername(username) {
+  const u = String(username || '').trim();
+  let slug = u.toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .substring(0, 32)
+    .replace(/-+$/g, '');
+  if (!slug) slug = 'pengguna';
+  const sidik = (await sha256Hex(u)).substring(0, 12);
+  return slug + '.' + sidik + '@' + AUTH_DOMAIN_BAYANGAN;
+}
+
+/**
+ * Coba masuk langsung lewat Firebase Auth.
+ *
+ * Mengembalikan:
+ *   { ok: true, profil }         → berhasil
+ *   { ok: false, lanjutKeGAS }   → akun belum ada / password tidak cocok;
+ *                                  pemanggil harus mencoba jalur lama
+ *   { ok: false, pesan }         → gagal yang sudah pasti (peran salah,
+ *                                  akses diblokir) — jangan coba jalur lama
+ */
+async function loginJalurCepat(roleDipilih, username, password) {
+  let kredensial;
+  try {
+    const email = await emailDariUsername(username);
+    kredensial = await fbAuth.signInWithEmailAndPassword(email, password);
+  } catch (e) {
+    // Akun belum pernah dibuat, atau passwordnya tidak cocok. Firebase
+    // sengaja tidak membedakan keduanya, jadi keduanya diteruskan ke jalur
+    // lama — di sana password lamanya masih bisa diperiksa.
+    return { ok: false, lanjutKeGAS: true, kode: e.code };
+  }
+
+  try {
+    const hasil = await kredensial.user.getIdTokenResult(true);
+    const klaim = hasil.claims || {};
+    const roleAsli = String(klaim.role || '');
+
+    // Peran yang dipilih di kartu login harus cocok dengan yang terdaftar
+    const peta = { 'UMKM': 'umkm', 'Admin': 'admin', 'UT': 'stakeholder' };
+    const diharapkan = peta[roleDipilih] || String(roleDipilih).toLowerCase();
+    const cocok = (roleAsli === diharapkan) ||
+                  (diharapkan === 'admin' && roleAsli === 'superadmin');
+    if (!roleAsli) {
+      // Klaim belum tertanam — akunnya belum lengkap. Serahkan ke jalur
+      // lama, yang akan membentuk ulang akunnya dengan klaim yang benar.
+      await keluarFirebase();
+      return { ok: false, lanjutKeGAS: true, kode: 'klaim-kosong' };
+    }
+    if (!cocok) {
+      await keluarFirebase();
+      return { ok: false, pesan: 'Username atau password salah.' };
+    }
+
+    // Profil lengkap diambil dari Firestore — klaim hanya memuat peran.
+    const dok = await db.collection('users').doc(username).get();
+    const u = dok.exists ? dok.data() : {};
+
+    if (u.statusAkses && String(u.statusAkses) !== 'Allowed') {
+      await keluarFirebase();
+      return { ok: false, pesan: 'Akses Anda sedang diblokir. Hubungi admin.' };
+    }
+
+    return {
+      ok: true,
+      profil: {
+        username: u.username || username,
+        role: roleAsli,
+        cabang: String(klaim.cabang || u.cabang || ''),
+        idUmkm: String(klaim.idUmkm || u.idUmkm || ''),
+        fotoURL: u.fotoURL || '',
+        alamat: u.alamat || '',
+        passwordDiubah: u.passwordDiubah === true
+      }
+    };
+  } catch (e) {
+    console.error('SIPUMA: jalur cepat gagal di tengah jalan —', e);
+    try { await keluarFirebase(); } catch (x) {}
+    return { ok: false, lanjutKeGAS: true, kode: e.code || 'galat' };
+  }
+}
+
+/**
+ * Pastikan sesi GAS tersedia, untuk permintaan yang memang butuh GAS
+ * (unggah berkas, reset password, kredensial).
+ *
+ * Pengguna yang masuk lewat jalur cepat tidak pernah menyentuh GAS, jadi
+ * sesinya baru diterbitkan di sini — saat benar-benar dibutuhkan. Dengan
+ * begitu login tetap tidak menyentuh GAS sama sekali.
+ */
+async function pastikanTokenGas() {
+  const s = AppState.session || {};
+  if (s.tokenGas) return s.tokenGas;
+  if (!fbAuth || !fbAuth.currentUser) return '';
+
+  try {
+    const idToken = await fbAuth.currentUser.getIdToken();
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'sesiDariToken', idToken: idToken }),
+      redirect: 'follow'
+    });
+    const data = await res.json();
+    if (data && data.success && data.data && data.data.tokenGas) {
+      AppState.session.tokenGas = data.data.tokenGas;
+      simpanSesiLokal(AppState.session);
+      return AppState.session.tokenGas;
+    }
+  } catch (e) {
+    console.error('SIPUMA: gagal menyiapkan sesi berkas —', e);
+  }
+  return '';
 }

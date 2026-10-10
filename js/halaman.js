@@ -159,10 +159,23 @@ function formUMKM(data) {
       <input class="form-control" id="fUmkmNoHP" value="${isEdit ? esc(data.NoHP || '') : ''}" placeholder="Contoh: 081234567890">
       <div class="login-hint">Dipakai untuk mengirim pengingat legalitas lewat WhatsApp. Boleh diawali 0 atau 62.</div>
     </div>
+    <div class="form-group">
+      <label class="form-label">Titik Lokasi di Peta
+        <span style="font-weight:400;color:var(--text-muted);">— opsional</span></label>
+      <div id="pilihLokasiUmkm"></div>
+    </div>
   `;
   const footer = `<button class="btn btn-outline" onclick="closeModal('modalGeneric')">Batal</button>
     <button class="btn btn-primary" id="btnSimpanUmkm" onclick="simpanUMKM(${isEdit})"><i class="bi bi-save"></i> Simpan</button>`;
   openFormModal(isEdit ? 'Ubah Data UMKM' : 'Tambah UMKM Baru', body, footer);
+
+  // Pemilih peta dipasang SETELAH jendelanya ada di halaman — peta tidak
+  // bisa digambar ke wadah yang belum lahir. Dijaga dengan typeof supaya
+  // formulir ini tetap berfungsi penuh andai berkas peta gagal dimuat.
+  if (typeof pasangPemilihLokasi === 'function') {
+    pasangPemilihLokasi('pilihLokasiUmkm',
+      isEdit ? data.Lat : null, isEdit ? data.Lng : null);
+  }
 }
 // Khusus untuk kolom "Dibina Sejak" — cuma butuh Bulan & Tahun (format
 // 'YYYY-MM', cocok dengan <input type="month">), tanggal hariannya
@@ -171,6 +184,8 @@ function formUMKM(data) {
 function simpanUMKM(isEdit) {
   const btn = document.getElementById('btnSimpanUmkm');
   const tglBinaanInput = document.getElementById('fUmkmTglBinaan').value;
+  const titikUmkm = (typeof ambilTitikPilihan === 'function')
+    ? ambilTitikPilihan('pilihLokasiUmkm') : null;
   const data = {
     KodeUnik: document.getElementById('fUmkmKodeUnik').value,
     NamaUMKM: document.getElementById('fUmkmNama').value.trim(),
@@ -178,6 +193,10 @@ function simpanUMKM(isEdit) {
     Spesialisasi: document.getElementById('fUmkmSpesialisasi').value.trim(),
     AlamatUsaha: document.getElementById('fUmkmAlamat').value.trim(),
     NoHP: document.getElementById('fUmkmNoHP').value.trim(),
+    // Titik lokasi: null bila tidak diisi atau dihapus. Dikirim apa adanya
+    // supaya menghapus titik pun tersimpan, bukan diabaikan diam-diam.
+    Lat: titikUmkm ? titikUmkm.lat : null,
+    Lng: titikUmkm ? titikUmkm.lng : null,
     // PENTING: kirim sebagai TEKS ('YYYY-MM', format Bulan & Tahun saja —
     // dari <input type="month">), BUKAN objek Date() langsung. Terbukti
     // dari error "Failed due to illegal value in property: TanggalBinaan"
@@ -1676,8 +1695,12 @@ async function simpanUploadLaporan() {
         // dimuat ulang, dan ID serta tautan berkasnya pun tidak terisi —
         // sehingga tombol Baca, Unduh, dan Ubah pada kartu itu tidak
         // berfungsi, padahal tampilannya terlihat normal.
+        // Nama tab ini adalah 'fileLaporan', bukan 'laporanCsr'. Sebelumnya
+        // tertulis 'laporanCsr' — perbandingannya tidak pernah benar, jadi
+        // daftar tidak pernah digambar ulang: berkasnya sudah masuk tetapi
+        // baru terlihat setelah pindah tab lalu kembali.
         AppState.cache.laporanCsr = null;
-        if (AppState.currentSection === 'laporanCsr') loadLaporanCsrAdmin();
+        if (AppState.currentSection === 'fileLaporan') loadLaporanCsrAdmin();
       }
       else showToast('Gagal', res.message, 'danger');
     }, () => {
@@ -1709,7 +1732,26 @@ function hapusLaporan(id) {
 // PROFIL SAYA (UMKM)
 // ════════════════════════════════════════════════════════
 function loadProfilSaya() {
-  const p = AppState.session.profil || {};
+  // Datanya diambil dari server, bukan dari sesi.
+  //
+  // Dulu halaman ini membaca AppState.session.profil — dan isian itu tidak
+  // pernah diisi oleh siapa pun, jadi Nama UMKM, Kode Unik, Sektor, dan
+  // Alamat selalu tampil kosong. Satu pembacaan ringan di sini membuat
+  // halamannya benar sekaligus menyediakan titik lokasi untuk peta.
+  const sec = AppState.currentSection;
+  const container = document.getElementById('app-container');
+  container.innerHTML = areaMemuat();
+
+  panggilServerAman('getUMKMByKode', [AppState.session.idUmkm], function (res) {
+    if (AppState.currentSection !== sec) return;
+    gambarProfilSaya((res && res.success && res.data) ? res.data : {});
+  }, function () {
+    if (AppState.currentSection !== sec) return;
+    container.innerHTML = areaGagal('Gagal memuat profil usaha.', 'loadProfilSaya()');
+  });
+}
+
+function gambarProfilSaya(p) {
   const container = document.getElementById('app-container');
   container.innerHTML = `
     ${pageHeader('Data Usaha', 'Profil Usaha', 'Saya', 'Perbarui foto dan alamat usaha Anda. Username dan Kode Unik tidak dapat diubah sendiri.', '')}
@@ -1730,21 +1772,40 @@ function loadProfilSaya() {
           <div class="form-group mb-0"><label class="form-label">Spesialisasi</label><input class="form-control" value="${esc(p.Spesialisasi)}" disabled></div>
         </div>
         <div class="form-group"><label class="form-label">Alamat Usaha</label><textarea class="form-control" id="profilAlamat">${esc(p.AlamatUsaha)}</textarea></div>
+        <div class="form-group">
+          <label class="form-label">Titik Lokasi Usaha di Peta
+            <span style="font-weight:400;color:var(--text-muted);">— opsional</span></label>
+          <div class="login-hint" style="margin-bottom:8px;">Dengan menandai lokasi usaha Anda,
+            pendamping PPU dapat menemukan tempat Anda saat kunjungan lapangan.</div>
+          <div id="pilihLokasiProfil"></div>
+        </div>
         <button class="btn btn-primary" id="btnSimpanProfilUmkm" onclick="simpanProfilUMKM()"><i class="bi bi-save"></i> Simpan Perubahan</button>
       </div>
     </div>
   `;
+
+  if (typeof pasangPemilihLokasi === 'function') {
+    pasangPemilihLokasi('pilihLokasiProfil', p.Lat, p.Lng);
+  }
 }
 function simpanProfilUMKM() {
   const btn = document.getElementById('btnSimpanProfilUmkm');
   const alamatBaru = document.getElementById('profilAlamat').value.trim();
+  const titik = (typeof ambilTitikPilihan === 'function')
+    ? ambilTitikPilihan('pilihLokasiProfil') : null;
   setBtnLoading(btn);
-  panggilServerAman('updateProfilUMKM', [AppState.session.idUmkm, alamatBaru, null], (res) => {
+  // Argumen ketiga = titik lokasi. Dikirim walau null, supaya menghapus
+  // titik pun benar-benar tersimpan.
+  panggilServerAman('updateProfil', [alamatBaru, '', titik], (res) => {
     resetBtn(btn);
     if (res.success) {
       showToast('Berhasil', res.message, 'success');
       AppState.session.alamat = alamatBaru;
-      safeStorageSet('sipuma_session', JSON.stringify(AppState.session));
+      // Memakai simpanSesiLokal(), bukan kunci lama 'sipuma_session'.
+      // Kunci penyimpanan sesi sudah berganti sejak pindah ke Firebase —
+      // menulis ke kunci lama membuat perubahannya hilang saat halaman
+      // dimuat ulang.
+      simpanSesiLokal(AppState.session);
     } else showToast('Gagal', res.message, 'danger');
   }, () => {
     resetBtn(btn);

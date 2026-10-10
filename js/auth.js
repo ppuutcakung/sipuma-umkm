@@ -87,32 +87,74 @@ async function handleLogin(e) {
   sembunyikanGalatLogin();
   setBtnLoading(btn, 'Memverifikasi...');
 
-  // Login memakai bentuk payload khusus (role/username/password di tingkat
-  // atas, bukan di dalam args) — karena itu tidak lewat panggilAPI biasa.
+  // ── Dua jalur login ──
   //
-  // Alurnya: GAS memverifikasi password, lalu menerbitkan Custom Token.
-  // Token itu dipakai masuk ke Firebase — sejak saat itu seluruh operasi
-  // data ditegakkan Firestore Security Rules, bukan lagi kode kita.
-  const hasil = await kirimLogin(roleLoginTerpilih, username, password);
+  // 1. JALUR CEPAT — langsung ke Firebase Auth, tanpa menyentuh GAS.
+  //    Memakan sekitar 0,3 detik.
+  //
+  // 2. JALUR LAMA — lewat GAS, dipakai hanya bila akun Firebase Auth-nya
+  //    belum terbentuk. Memakan 2–5 detik. Begitu berhasil, GAS sekalian
+  //    membuatkan akun jalur cepat, sehingga login BERIKUTNYA sudah kencang.
+  //
+  // Dengan cara ini tidak ada seorang pun yang perlu mengganti password,
+  // dan tidak ada yang bisa terkunci: jalur lama tetap hidup sebagai
+  // cadangan sampai semua orang berpindah sendiri.
+  let p = null, tokenGas = '', pesanSukses = '';
 
-  if (!hasil.success) {
+  const cepat = await loginJalurCepat(roleLoginTerpilih, username, password);
+  if (cepat.ok) {
+    p = cepat.profil;
+    pesanSukses = 'Login berhasil. Selamat datang, ' + p.username + '!';
+  } else if (!cepat.lanjutKeGAS) {
+    // Gagal yang sudah pasti — mencoba jalur lama hanya membuang waktu
     resetBtn(btn);
-    tampilkanGalatLogin(hasil.message || 'Login gagal.');
+    tampilkanGalatLogin(cepat.pesan || 'Login gagal.');
     return;
-  }
+  } else {
+    // Sebabnya dicatat supaya "kok masih lambat" tidak perlu ditebak lagi:
+    //   auth/user-not-found   → akun jalur cepat memang belum ada
+    //   auth/wrong-password   → password Firebase belum sama dengan yang lama
+    //   klaim-kosong          → akunnya ada, tetapi perannya belum tertanam
+    console.info('SIPUMA: jalur cepat dilewati — ' + (cepat.kode || 'tidak diketahui') +
+                 '. Login kali ini memakai jalur lama.');
+    setBtnLoading(btn, 'Memverifikasi...');
+    const hasil = await kirimLogin(roleLoginTerpilih, username, password);
 
-  try {
-    setBtnLoading(btn, 'Menghubungkan...');
-    await masukFirebaseDenganToken(hasil.data.customToken);
-  } catch (e) {
-    resetBtn(btn);
-    console.error('Gagal masuk Firebase:', e);
-    tampilkanGalatLogin('Verifikasi berhasil, tetapi gagal menghubungkan ke basis data. Coba lagi.');
-    return;
+    if (!hasil.success) {
+      resetBtn(btn);
+      tampilkanGalatLogin(hasil.message || 'Login gagal.');
+      return;
+    }
+
+    try {
+      setBtnLoading(btn, 'Menghubungkan...');
+      await masukFirebaseDenganToken(hasil.data.customToken);
+    } catch (e) {
+      resetBtn(btn);
+      console.error('Gagal masuk Firebase:', e);
+      tampilkanGalatLogin('Verifikasi berhasil, tetapi gagal menghubungkan ke basis data. Coba lagi.');
+      return;
+    }
+    p = hasil.data.profil;
+    tokenGas = hasil.data.tokenGas || '';
+    pesanSukses = hasil.message;
+
+    // Bila akun jalur cepat gagal dibuat, sebabnya ditampilkan di sini.
+    // Tanpa ini, satu-satunya gejala adalah "login kok masih lambat" —
+    // tanpa petunjuk apa pun tentang apa yang salah.
+    if (hasil.data.galatJalurCepat) {
+      console.warn(
+        '%cSIPUMA: akun login cepat GAGAL dibuat.',
+        'color:#DC2626;font-weight:bold;',
+        '\n\nSebab: ' + hasil.data.galatJalurCepat +
+        '\n\nSelama ini belum teratasi, login akan tetap memakai jalur lama' +
+        ' (2–5 detik). Kirimkan pesan di atas untuk ditelusuri.');
+    } else {
+      console.info('SIPUMA: akun login cepat berhasil dibuat. ' +
+        'Login berikutnya akan jauh lebih cepat.');
+    }
   }
   resetBtn(btn);
-
-  const p = hasil.data.profil;
   AppState.session = {
     username: p.username,
     // Firestore memakai penamaan baru (admin/stakeholder/umkm), sedangkan
@@ -122,9 +164,9 @@ async function handleLogin(e) {
     roleFS: p.role,
     cabang: p.cabang, idUmkm: p.idUmkm, fotoURL: p.fotoURL, alamat: p.alamat,
     passwordDiubah: p.passwordDiubah === true,
-    // Dipakai untuk permintaan yang tetap harus lewat GAS: unggah berkas
-    // ke Drive dan penulisan koleksi `kredensial` yang tertutup bagi browser.
-    tokenGas: hasil.data.tokenGas || ''
+    // Kosong bila masuk lewat jalur cepat. Sesinya baru diterbitkan saat
+    // ada permintaan yang memang butuh GAS — lihat pastikanTokenGas().
+    tokenGas: tokenGas
   };
   // Stakeholder & superadmin melihat lintas cabang. Tetapi menampilkan
   // data GABUNGAN justru membingungkan — angka dashboard jadi campuran
@@ -144,7 +186,7 @@ async function handleLogin(e) {
 
   document.getElementById('loginPassword').value = '';
   masukKeAplikasi();
-  showToast('Berhasil', hasil.message, 'success');
+  showToast('Berhasil', pesanSukses, 'success');
 }
 
 /** Permintaan login memakai bentuk payload khusus (bukan args biasa). */
@@ -152,18 +194,29 @@ async function kirimLogin(role, username, password) {
   if (!GAS_URL || GAS_URL === 'GANTI_DENGAN_URL_EXEC_ANDA') {
     return { success: false, message: 'Alamat server belum dikonfigurasi. Isi GAS_URL di file js/config.js.' };
   }
-  try {
-    const res = await fetch(GAS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'loginFirebase', role: role, username: username, password: password }),
-      redirect: 'follow'
-    });
-    if (!res.ok) throw new Error('Server membalas status ' + res.status);
-    return await res.json();
-  } catch (err) {
-    console.error('Login gagal:', err);
-    return { success: false, message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.' };
+  // Dicoba dua kali. Permintaan pertama ke Apps Script sesekali tersendat
+  // — biasanya saat servernya baru bangun — dan tanpa percobaan kedua,
+  // satu-satunya gejala adalah "Tidak dapat terhubung ke server" yang
+  // menyesatkan, padahal koneksi penggunanya baik-baik saja dan percobaan
+  // berikutnya langsung berhasil.
+  for (let i = 1; i <= 2; i++) {
+    try {
+      const res = await fetch(GAS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'loginFirebase', role: role, username: username, password: password }),
+        redirect: 'follow'
+      });
+      if (!res.ok) throw new Error('Server membalas status ' + res.status);
+      return await res.json();
+    } catch (err) {
+      if (i === 2) {
+        console.error('Login gagal:', err);
+        return { success: false, message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.' };
+      }
+      console.warn('SIPUMA: percobaan login pertama gagal, diulang —', err.message);
+      await new Promise(function (r) { setTimeout(r, 800); });
+    }
   }
 }
 
@@ -208,7 +261,12 @@ function panaskanServer() {
   _sudahPanaskan = true;
   try {
     // doGet hanya mengembalikan status layanan — ringan dan tanpa token.
-    fetch(GAS_URL, { method: 'GET', redirect: 'follow' }).catch(function () {});
+    //
+    // Pengalihannya SENGAJA tidak diikuti. Permintaan pertama sudah cukup
+    // untuk membangunkan server; mengikuti pengalihannya justru berakhir di
+    // alamat script.googleusercontent.com yang membalas 404, dan 404 itu
+    // muncul sebagai galat merah di Console walau tidak ada yang rusak.
+    fetch(GAS_URL, { method: 'GET', redirect: 'manual' }).catch(function () {});
   } catch (e) { /* diabaikan dengan sengaja */ }
 }
 

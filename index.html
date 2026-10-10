@@ -6,7 +6,20 @@
   <title>SIPUMA — PPU UT Cakung</title>
   <meta name="description" content="Sistem Informasi Pendataan &amp; Manajemen UMKM binaan PPU UT Cakung.">
 
+  <!-- Ikon tab. Ditanam langsung di halaman, bukan sebagai berkas terpisah,
+       supaya tidak ada permintaan tambahan ke server. Tanpa baris ini
+       peramban selalu mencari /favicon.ico yang memang tidak ada, dan
+       kegagalannya muncul sebagai galat merah 404 di Console — tidak
+       berbahaya, tetapi membuat galat yang sungguhan jadi sulit terlihat. -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231D4ED8'/%3E%3Ctext x='16' y='22' font-family='Inter,Arial,sans-serif' font-size='15' font-weight='700' fill='%23fff' text-anchor='middle'%3ES%3C/text%3E%3C/svg%3E">
+
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+
+  <!-- Peta Sebaran UMKM. Leaflet dan Leaflet.markercluster: gratis, tanpa
+       kunci API, dan tidak menyentuh Firebase sama sekali. -->
+  <link href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
 </head>
@@ -182,6 +195,8 @@
   <div class="toast-stack" id="toastStack"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
   <!-- Firebase SDK (versi compat: bisa dipakai tanpa alat bangun/bundler) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -206,6 +221,7 @@
   <script src="js/halaman.js"></script>
   <script src="js/legalitas.js"></script>
   <script src="js/ekspor.js"></script>
+  <script src="js/peta.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
