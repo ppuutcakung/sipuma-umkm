@@ -22,6 +22,59 @@ const DAFTAR_KATEGORI_LAPORAN = ['AP-AR & KPI', 'Hasil SROI', 'UMKM goes to Vend
 // pemecahan itu hanya diperlukan karena batasan Apps Script HtmlService.
 // Di GitHub Pages tidak ada batasan tersebut.
 
+// ════════════════════════════════════════════════════════
+// TOMBOL TABEL MEMBAWA PENANDA, BUKAN ISI DATANYA
+// ════════════════════════════════════════════════════════
+// Dulu isi satu baris ditempelkan langsung ke dalam atribut onclick
+// tombolnya. Cara itu bekerja — sampai ada nama yang mengandung tanda
+// petik.
+//
+// Sebabnya begini. Atribut HTML dibatasi oleh tanda petik. Begitu nama
+// seperti  Dapur Bu'Ani  masuk ke dalamnya, petik di tengah nama itu
+// dianggap sebagai PENUTUP atribut. Sisa perintahnya tercecer menjadi
+// potongan HTML yang tidak berarti apa-apa, dan tombolnya mati total —
+// tanpa pesan galat, tanpa tanda apa pun di layar. Dari sisi pengguna,
+// barisnya terlihat "terkunci".
+//
+// Melewatkannya lewat esc() pun TIDAK menolong, dan ini jebakan yang
+// halus: esc() mengubah petik menjadi &#39;, peramban mengembalikannya
+// menjadi petik lagi SEBELUM perintahnya dibaca, dan perintahnya tetap
+// rusak — hanya cara rusaknya yang berpindah.
+//
+// Satu-satunya jalan yang benar-benar aman: tombol TIDAK membawa isi
+// datanya sama sekali. Ia hanya membawa penanda baris di atribut data-,
+// dan perintahnya menerima `this` — tombol itu sendiri. Nilai di dalam
+// atribut data- tidak pernah dibaca sebagai perintah, jadi petik, kutip
+// ganda, &, maupun < semuanya aman.
+//
+// Berlaku untuk Data Master UMKM, Catatan Prestasi, dan Manajemen User —
+// tiga tempat yang dulu memakai pola lama yang sama.
+
+/** Cari satu baris UMKM dari ingatan aplikasi berdasarkan kode uniknya. */
+function cariBarisUmkm(kode) {
+  return (AppState.cache.umkm || []).find(function (x) {
+    return String(x.KodeUnik) === String(kode);
+  }) || null;
+}
+
+function editUmkmDariTabel(tombol) {
+  const u = cariBarisUmkm(tombol && tombol.dataset ? tombol.dataset.kode : '');
+  if (!u) {
+    showToast('Tidak ditemukan',
+      'Data UMKM itu tidak ada lagi di daftar. Muat ulang halaman lalu coba lagi.', 'warning');
+    return;
+  }
+  formUMKM(u);
+}
+
+function ubahStatusUmkmDariTabel(tombol) {
+  ubahStatusAktifUMKM(tombol.dataset.kode, tombol.dataset.jadikan === '1');
+}
+
+function hapusUmkmDariTabel(tombol) {
+  hapusUMKM(tombol.dataset.kode);
+}
+
 function loadMasterUmkm() {
   // PENTING: pakai cache yang SUDAH ADA dulu (termasuk data awal yang
   // ditanam server saat halaman dimuat) — JANGAN paksa ambil ulang lewat
@@ -123,9 +176,9 @@ function renderMasterUmkmTabel(halaman) {
                 <span class="status-pill ${umkmAktif(u) ? 'allowed' : 'blocked'}"><span class="dot"></span>${umkmAktif(u) ? 'Aktif' : 'Tidak Aktif'}</span>
               </td>
               <td>
-                <button class="action-icon-btn primary" title="Ubah" onclick='formUMKM(${JSON.stringify(u)})'><i class="bi bi-pencil"></i></button>
-                <button class="action-icon-btn ${umkmAktif(u) ? 'danger' : ''}" title="${umkmAktif(u) ? 'Nonaktifkan' : 'Aktifkan'}" onclick="ubahStatusAktifUMKM('${u.KodeUnik}', ${umkmAktif(u) ? 'false' : 'true'})"><i class="bi bi-${umkmAktif(u) ? 'toggle-on' : 'toggle-off'}"></i></button>
-                <button class="action-icon-btn danger" title="Hapus" onclick="hapusUMKM('${u.KodeUnik}')"><i class="bi bi-trash"></i></button>
+                <button class="action-icon-btn primary" title="Ubah" data-kode="${esc(u.KodeUnik)}" onclick="editUmkmDariTabel(this)"><i class="bi bi-pencil"></i></button>
+                <button class="action-icon-btn ${umkmAktif(u) ? 'danger' : ''}" title="${umkmAktif(u) ? 'Nonaktifkan' : 'Aktifkan'}" data-kode="${esc(u.KodeUnik)}" data-jadikan="${umkmAktif(u) ? '0' : '1'}" onclick="ubahStatusUmkmDariTabel(this)"><i class="bi bi-${umkmAktif(u) ? 'toggle-on' : 'toggle-off'}"></i></button>
+                <button class="action-icon-btn danger" title="Hapus" data-kode="${esc(u.KodeUnik)}" onclick="hapusUmkmDariTabel(this)"><i class="bi bi-trash"></i></button>
               </td>
             </tr>`).join('') : `<tr><td colspan="8"><div class="table-empty"><i class="bi bi-inbox"></i>${kataKunci ? 'Tidak ada UMKM yang cocok dengan pencarian.' : 'Belum ada data UMKM.'}</div></td></tr>`}
         </tbody>
@@ -1244,6 +1297,20 @@ function simpanFasilitasi() {
 // ════════════════════════════════════════════════════════
 // MODUL: CATATAN PRESTASI UMKM (Admin input, CSR UT lihat)
 // ════════════════════════════════════════════════════════
+/** Buka formulir ubah prestasi dari tombol barisnya. Lihat catatan di atas. */
+function editPrestasiDariTabel(tombol) {
+  const id = tombol && tombol.dataset ? tombol.dataset.id : '';
+  const r = (AppState.cache.prestasi || []).find(function (x) {
+    return String(x.ID) === String(id);
+  });
+  if (!r) {
+    showToast('Tidak ditemukan',
+      'Catatan itu tidak ada lagi di daftar. Muat ulang halaman lalu coba lagi.', 'warning');
+    return;
+  }
+  formPrestasi(r);
+}
+
 function loadPrestasiAdmin() {
   const sec = AppState.currentSection;
   ensureUmkmCacheThen(() => {
@@ -1303,7 +1370,7 @@ function renderPrestasiTabel(halaman) {
       <div style="overflow-x:auto;">
       <table class="sipuma-table">
         <thead><tr><th>UMKM</th><th>Kategori</th><th>Deskripsi</th><th>Periode</th><th>Dicatat</th><th>Aksi</th></tr></thead>
-        <tbody>${rowsHalamanIni.length ? rowsHalamanIni.map(r => `<tr><td><b>${esc(r.NamaUMKM)}</b></td><td><span class="sector-tag">${esc(r.KategoriPrestasi)}</span></td><td style="max-width:340px;">${esc(r.DeskripsiPrestasi)}</td><td>${esc(r.Bulan)} ${esc(r.Tahun)}</td><td class="text-muted">${formatTgl(r.TanggalPencatatan)}</td><td><button class="action-icon-btn primary" title="Ubah" onclick='formPrestasi(${JSON.stringify(r)})'><i class="bi bi-pencil"></i></button><button class="action-icon-btn danger" title="Hapus" onclick="hapusPrestasi('${r.ID}')"><i class="bi bi-trash"></i></button></td></tr>`).join('') : `<tr><td colspan="8"><div class="table-empty"><i class="bi bi-inbox"></i>${kataKunci ? 'Tidak ada catatan yang cocok.' : 'Belum ada catatan prestasi.'}</div></td></tr>`}</tbody>
+        <tbody>${rowsHalamanIni.length ? rowsHalamanIni.map(r => `<tr><td><b>${esc(r.NamaUMKM)}</b></td><td><span class="sector-tag">${esc(r.KategoriPrestasi)}</span></td><td style="max-width:340px;">${esc(r.DeskripsiPrestasi)}</td><td>${esc(r.Bulan)} ${esc(r.Tahun)}</td><td class="text-muted">${formatTgl(r.TanggalPencatatan)}</td><td><button class="action-icon-btn primary" title="Ubah" data-id="${esc(r.ID)}" onclick="editPrestasiDariTabel(this)"><i class="bi bi-pencil"></i></button><button class="action-icon-btn danger" title="Hapus" data-id="${esc(r.ID)}" onclick="hapusPrestasi(this.dataset.id)"><i class="bi bi-trash"></i></button></td></tr>`).join('') : `<tr><td colspan="8"><div class="table-empty"><i class="bi bi-inbox"></i>${kataKunci ? 'Tidak ada catatan yang cocok.' : 'Belum ada catatan prestasi.'}</div></td></tr>`}</tbody>
       </table>
       </div>
       ${totalHalaman > 1 ? `
@@ -1975,9 +2042,9 @@ function renderUserAksesTabel(halaman) {
             <td>${u.StatusAktif ? 'Aktif' : 'Nonaktif'}</td>
             <td class="text-muted">${formatTgl(u.TanggalDibuat)}</td>
             <td>
-              <button class="action-icon-btn primary" title="Edit" onclick='formEditUser(${JSON.stringify(u)})'><i class="bi bi-pencil"></i></button>
-              <button class="action-icon-btn ${u.StatusAksesLogin === 'Allowed' ? 'danger' : ''}" title="${u.StatusAksesLogin === 'Allowed' ? 'Blokir' : 'Buka Akses'}" onclick="toggleAkses('${esc(u.Username)}','${u.StatusAksesLogin}')"><i class="bi bi-${u.StatusAksesLogin === 'Allowed' ? 'lock' : 'unlock'}"></i></button>
-              ${(u.Role !== 'Admin' && u.Role !== 'UT') ? `<button class="action-icon-btn danger" title="Hapus" onclick="hapusUser('${esc(u.Username)}')"><i class="bi bi-trash"></i></button>` : `<span class="text-muted" style="font-size:10.5px;" title="Akun sistem tidak dapat dihapus"><i class="bi bi-shield-lock"></i></span>`}
+              <button class="action-icon-btn primary" title="Edit" data-user="${esc(u.Username)}" onclick="editUserDariTabel(this)"><i class="bi bi-pencil"></i></button>
+              <button class="action-icon-btn ${u.StatusAksesLogin === 'Allowed' ? 'danger' : ''}" title="${u.StatusAksesLogin === 'Allowed' ? 'Blokir' : 'Buka Akses'}" data-user="${esc(u.Username)}" data-status="${esc(u.StatusAksesLogin)}" onclick="toggleAkses(this.dataset.user, this.dataset.status)"><i class="bi bi-${u.StatusAksesLogin === 'Allowed' ? 'lock' : 'unlock'}"></i></button>
+              ${(u.Role !== 'Admin' && u.Role !== 'UT') ? `<button class="action-icon-btn danger" title="Hapus" data-user="${esc(u.Username)}" onclick="hapusUser(this.dataset.user)"><i class="bi bi-trash"></i></button>` : `<span class="text-muted" style="font-size:10.5px;" title="Akun sistem tidak dapat dihapus"><i class="bi bi-shield-lock"></i></span>`}
             </td>
           </tr>`).join('') : `<tr><td colspan="6"><div class="table-empty"><i class="bi bi-inbox"></i>${kataKunci ? 'Tidak ada user yang cocok.' : 'Belum ada data user.'}</div></td></tr>`}
         </tbody>
@@ -1988,6 +2055,20 @@ function renderUserAksesTabel(halaman) {
         ${Array.from({length: totalHalaman}, (_, i) => i + 1).map(p => `<button class="btn ${p === halaman ? 'btn-primary' : 'btn-outline'} btn-sm" onclick="renderUserAksesTabel(${p})">${p}</button>`).join('')}
       </div>` : ''}
   `;
+}
+
+/** Buka formulir edit user dari tombol barisnya. Lihat catatan di bagian atas. */
+function editUserDariTabel(tombol) {
+  const nama = tombol && tombol.dataset ? tombol.dataset.user : '';
+  const u = (AppState.cache.users || []).find(function (x) {
+    return String(x.Username) === String(nama);
+  });
+  if (!u) {
+    showToast('Tidak ditemukan',
+      'Akun itu tidak ada lagi di daftar. Muat ulang halaman lalu coba lagi.', 'warning');
+    return;
+  }
+  formEditUser(u);
 }
 
 function formEditUser(u) {
@@ -2015,14 +2096,14 @@ function formEditUser(u) {
       </div>
       <div class="d-flex gap-2" style="flex-wrap:wrap;">
         <input class="form-control" id="fuPasswordBaru" placeholder="Password baru (minimal 6 karakter)" style="flex:1;min-width:200px;">
-        <button class="btn btn-outline" id="btnResetPassword" onclick="resetPasswordUser('${esc(u.Username)}')">
+        <button class="btn btn-outline" id="btnResetPassword" data-user="${esc(u.Username)}" onclick="resetPasswordUser(this.dataset.user)">
           <i class="bi bi-key"></i> Terapkan
         </button>
       </div>
     </div>
   `;
   const footer = `<button class="btn btn-outline" onclick="closeModal('modalGeneric')">Batal</button><button class="btn btn-primary" id="btnSimpanUser" onclick="simpanEditUser()"><i class="bi bi-save"></i> Simpan</button>`;
-  openFormModal('Edit User: ' + u.Username, body, footer);
+  openFormModal('Edit User: ' + esc(u.Username), body, footer);
 }
 function simpanEditUser() {
   const btn = document.getElementById('btnSimpanUser');
@@ -2062,10 +2143,10 @@ function toggleAkses(username, currentStatus) {
   const next = currentStatus === 'Allowed' ? 'Blocked' : 'Allowed';
   if (next === 'Blocked') {
     const body = `<div class="form-group"><label class="form-label">Alasan Pemblokiran</label><textarea class="form-control" id="alasanBlokir" placeholder="Contoh: Belum update omset 3 bulan"></textarea></div>`;
-    const footer = `<button class="btn btn-outline" onclick="closeModal('modalGeneric')">Batal</button><button class="btn btn-danger" onclick="eksekusiToggleAkses('${username}','Blocked', document.getElementById('alasanBlokir').value)">Blokir Akses</button>`;
-    openFormModal('Blokir Akses: ' + username, body, footer);
+    const footer = `<button class="btn btn-outline" onclick="closeModal('modalGeneric')">Batal</button><button class="btn btn-danger" data-user="${esc(username)}" onclick="eksekusiToggleAkses(this.dataset.user,'Blocked', document.getElementById('alasanBlokir').value)">Blokir Akses</button>`;
+    openFormModal('Blokir Akses: ' + esc(username), body, footer);
   } else {
-    showConfirm('Buka kembali akses login untuk "' + username + '"?', () => eksekusiToggleAkses(username, 'Allowed', ''), 'Ya, Buka Akses');
+    showConfirm('Buka kembali akses login untuk "' + esc(username) + '"?', () => eksekusiToggleAkses(username, 'Allowed', ''), 'Ya, Buka Akses');
   }
 }
 function eksekusiToggleAkses(username, status, alasan) {
