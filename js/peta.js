@@ -119,6 +119,122 @@ function titikSah(lat, lng) {
 }
 
 // ════════════════════════════════════════════════════════
+// GAYA TAMPILAN PENANDA
+// ════════════════════════════════════════════════════════
+// Ditanam dari sini, bukan dari berkas CSS, supaya seluruh fitur peta
+// tetap berada dalam satu berkas — memasang maupun mencabutnya cukup
+// menyentuh js/peta.js saja.
+
+let _gayaPetaTerpasang = false;
+
+function pasangGayaPeta() {
+  if (_gayaPetaTerpasang || document.getElementById('gayaPetaSipuma')) return;
+  _gayaPetaTerpasang = true;
+  const el = document.createElement('style');
+  el.id = 'gayaPetaSipuma';
+  el.textContent = [
+    // Penanda UMKM: titik padat dengan gelombang yang menyebar keluar.
+    //
+    // Sengaja BERDENYUT, bukan berkedip mati-hidup. Penanda yang hilang
+    // separuh waktu justru menyulitkan saat mata sedang menyapu peta —
+    // sedangkan denyut membuatnya menonjol tanpa pernah lenyap. Inilah
+    // yang membedakannya dari lambang peta pada umumnya yang diam.
+    '.sipuma-pin{position:relative;width:16px;height:16px;color:#6B7280;}',
+    '.sipuma-pin i{position:absolute;inset:0;border-radius:50%;background:currentColor;' +
+      'border:2.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.45);}',
+    '.sipuma-pin u{position:absolute;inset:0;border-radius:50%;background:currentColor;' +
+      'opacity:.55;animation:sipumaDenyut 1.7s ease-out infinite;}',
+    '.sipuma-pin.redup{opacity:.45;}',
+    '@keyframes sipumaDenyut{0%{transform:scale(1);opacity:.55}' +
+      '70%{transform:scale(2.7);opacity:0}100%{transform:scale(2.7);opacity:0}}',
+
+    // Lingkaran kelompok ikut berdenyut, tetapi yang digerakkan hanya
+    // lapisan DI DALAMNYA. Lapisan luarnya dipakai Leaflet untuk menaruh
+    // posisi di peta — menggesernya akan membuat kelompok melayang jauh
+    // dari tempat seharusnya.
+    '.marker-cluster>div{animation:sipumaDenyutKlaster 1.9s ease-in-out infinite;}',
+    '@keyframes sipumaDenyutKlaster{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}',
+
+    // Penanda kantor: foto persegi, bukan titik — supaya sekali lihat
+    // sudah jelas bahwa itu bukan UMKM.
+    '.sipuma-kantor{position:relative;width:44px;height:44px;}',
+    '.sipuma-kantor .bingkai{position:absolute;inset:0;border-radius:10px;overflow:hidden;' +
+      'border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.45);background:#fff;' +
+      'display:flex;align-items:center;justify-content:center;}',
+    '.sipuma-kantor .bingkai img{width:100%;height:100%;object-fit:cover;}',
+    '.sipuma-kantor .bingkai i{font-size:20px;}',
+    '.sipuma-kantor .pita{position:absolute;left:50%;transform:translateX(-50%);' +
+      'bottom:-16px;white-space:nowrap;font-size:10px;font-weight:700;color:#fff;' +
+      'padding:1px 6px;border-radius:7px;box-shadow:0 1px 3px rgba(0,0,0,.35);}',
+
+    // Hormati pengguna yang mematikan animasi di pengaturan perangkatnya —
+    // sebagian orang pusing atau terganggu oleh gerakan berulang.
+    '@media (prefers-reduced-motion: reduce){' +
+      '.sipuma-pin u,.marker-cluster>div{animation:none!important;}}'
+  ].join('\n');
+  document.head.appendChild(el);
+}
+
+// ════════════════════════════════════════════════════════
+// KANTOR PPU & KANTOR STAKEHOLDER
+// ════════════════════════════════════════════════════════
+// Titiknya disimpan di config/{cabang} — satu baris yang sudah dibaca
+// aplikasi sejak login, jadi menampilkannya di peta tidak menambah
+// pembacaan sama sekali. Setiap cabang punya titik kantornya sendiri.
+
+const KANTOR_WARNA = { ppu: '#1D4ED8', stk: '#B45309' };
+
+/** Ambil kedua titik kantor dari konfigurasi cabang yang sedang dilihat. */
+function daftarKantorPeta() {
+  const c = AppState.config || {};
+  return [
+    {
+      jenis: 'ppu',
+      nama: c.kantorPpuNama || 'Kantor PPU',
+      lat: c.kantorPpuLat, lng: c.kantorPpuLng, foto: c.kantorPpuFoto || '',
+      ikon: 'bi-building-fill', label: 'PPU'
+    },
+    {
+      jenis: 'stk',
+      nama: c.kantorStkNama || 'Kantor Stakeholder',
+      lat: c.kantorStkLat, lng: c.kantorStkLng, foto: c.kantorStkFoto || '',
+      ikon: 'bi-briefcase-fill', label: 'Stakeholder'
+    }
+  ];
+}
+
+/** Boleh mengatur titik kantor? Hanya pengelola. */
+function bolehAturKantor() {
+  const r = (AppState.session || {}).roleFS;
+  return r === 'admin' || r === 'superadmin';
+}
+
+/**
+ * Jarak garis lurus antara dua titik, dalam kilometer.
+ *
+ * Ini jarak LURUS di permukaan bumi, bukan jarak tempuh lewat jalan —
+ * jalan sebenarnya hampir selalu lebih panjang. Dipakai sebagai gambaran
+ * kasar "dekat atau jauh", dan di layar selalu diberi keterangan
+ * "garis lurus" supaya tidak disangka jarak berkendara.
+ */
+function jarakKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const rad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * rad;
+  const dLng = (lng2 - lng1) * rad;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * rad) * Math.cos(lat2 * rad) *
+            Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/** Jarak yang enak dibaca: di bawah 1 km ditulis dalam meter. */
+function teksJarak(km) {
+  if (km < 1) return Math.round(km * 1000) + ' m';
+  return km.toFixed(1).replace('.', ',') + ' km';
+}
+
+// ════════════════════════════════════════════════════════
 // MEMBACA KOORDINAT DARI TEKS
 // ════════════════════════════════════════════════════════
 
@@ -305,8 +421,8 @@ function perbaruiInfoPemilih(idWadah, pesan) {
       (pesan ? '<br><span style="color:var(--madya-text);">' + esc(pesan) + '</span>' : '');
     if (tblHapus) tblHapus.style.display = '';
   } else {
-    info.innerHTML = 'Belum ada titik lokasi. Boleh dikosongkan — UMKM tetap tersimpan, ' +
-      'hanya saja belum muncul di peta sebaran.';
+    info.innerHTML = 'Belum ada titik lokasi. Boleh dikosongkan — datanya tetap ' +
+      'tersimpan, hanya saja belum muncul di peta sebaran.';
     if (tblHapus) tblHapus.style.display = 'none';
   }
 }
@@ -424,6 +540,11 @@ function gambarHalamanPeta() {
           '<button class="btn btn-outline btn-sm" onclick="petaKembaliKeIndonesia()" ' +
             'title="Kembali melihat seluruh Indonesia">' +
             '<i class="bi bi-arrows-fullscreen"></i> Tampilkan Seluruh Indonesia</button>' +
+          (bolehAturKantor()
+            ? '<button class="btn btn-outline btn-sm" onclick="formKantorPeta()" ' +
+                'title="Tandai lokasi kantor PPU dan kantor Stakeholder">' +
+                '<i class="bi bi-building-add"></i> Atur Titik Kantor</button>'
+            : '') +
         '</div>' +
       '</div>' +
       '<div style="padding:0 14px 14px;">' +
@@ -479,6 +600,7 @@ function mulaiPetaSebaran() {
   // kembali ke sini akan membuat petanya gagal tampil sama sekali.
   if (_petaUtama) { try { _petaUtama.remove(); } catch (e) {} _petaUtama = null; }
 
+  pasangGayaPeta();
   _petaUtama = L.map('petaKanvas', petaOpsiDasar());
   petaLapisanDasar(_petaUtama);
 
@@ -539,6 +661,7 @@ function mulaiPetaSebaran() {
   });
 
   _petaUtama.addLayer(_petaKlaster);
+  gambarPenandaKantor();
   terapkanSaringPeta();
 
   [60, 300, 700].forEach(function (ms) {
@@ -570,9 +693,9 @@ function terapkanSaringPeta() {
     const mati = (u.StatusAktif === 'Tidak Aktif');
     const ikon = L.divIcon({
       className: '',
-      html: '<div style="width:16px;height:16px;border-radius:50%;background:' + warna + ';' +
-            'border:2.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);' +
-            (mati ? 'opacity:.45;' : '') + '"></div>',
+      html: '<div class="sipuma-pin' + (mati ? ' redup' : '') + '" style="color:' + warna + ';">' +
+              '<u></u><i></i>' +
+            '</div>',
       iconSize: [16, 16],
       iconAnchor: [8, 8]
     });
@@ -637,6 +760,206 @@ function sorotHasilSaringan() {
       });
     } catch (e) { /* biarkan pada tampilan sekarang */ }
   }, 350);
+}
+
+// ════════════════════════════════════════════════════════
+// PENANDA KANTOR DI PETA
+// ════════════════════════════════════════════════════════
+
+let _lapisanKantor = null;
+
+/**
+ * Gambar penanda kantor PPU dan kantor Stakeholder.
+ *
+ * Sengaja TIDAK ikut kelompok UMKM: bentuknya berbeda (foto persegi,
+ * bukan titik), selalu tampil apa pun saringannya, dan tidak ikut
+ * terhitung pada angka "Sudah Ditandai".
+ */
+function gambarPenandaKantor() {
+  if (!_petaUtama) return;
+  if (_lapisanKantor) {
+    try { _petaUtama.removeLayer(_lapisanKantor); } catch (e) {}
+    _lapisanKantor = null;
+  }
+
+  const daftar = daftarKantorPeta().filter(function (k) { return titikSah(k.lat, k.lng); });
+  if (!daftar.length) return;
+
+  _lapisanKantor = L.layerGroup();
+  daftar.forEach(function (k) {
+    const warna = KANTOR_WARNA[k.jenis];
+    const gambar = k.foto
+      ? '<img src="' + esc(normalizeFotoUrl(k.foto)) + '" alt="">'
+      : '<i class="bi ' + k.ikon + '" style="color:' + warna + ';"></i>';
+    const ikon = L.divIcon({
+      className: '',
+      html: '<div class="sipuma-kantor">' +
+              '<span class="bingkai" style="box-shadow:0 0 0 2px ' + warna +
+                ',0 2px 8px rgba(0,0,0,.45);">' + gambar + '</span>' +
+              '<span class="pita" style="background:' + warna + ';">' + esc(k.label) + '</span>' +
+            '</div>',
+      iconSize: [44, 44],
+      iconAnchor: [22, 22]
+    });
+    // zIndexOffset tinggi supaya penanda kantor tidak tertimbun titik UMKM.
+    L.marker([Number(k.lat), Number(k.lng)],
+             { icon: ikon, title: k.nama, zIndexOffset: 1000 })
+      .bindPopup(isiPopupKantor(k), { maxWidth: 240 })
+      .addTo(_lapisanKantor);
+  });
+  _lapisanKantor.addTo(_petaUtama);
+}
+
+function isiPopupKantor(k) {
+  const rute = 'https://www.google.com/maps/dir/?api=1&destination=' +
+               Number(k.lat) + ',' + Number(k.lng);
+  return '<div style="min-width:180px;">' +
+    '<div style="font-weight:700;font-size:13.5px;">' + esc(k.nama) + '</div>' +
+    '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">' +
+      esc(k.label) + '</div>' +
+    '<a class="btn btn-primary btn-sm" href="' + rute + '" target="_blank" rel="noopener">' +
+      '<i class="bi bi-signpost-2"></i> Rute</a>' +
+  '</div>';
+}
+
+// ── Formulir pengaturan titik kantor (hanya pengelola) ──
+// Foto yang sudah diunggah ditampung di sini dulu, dan baru benar-benar
+// tersimpan saat tombol Simpan ditekan.
+const _fotoKantor = { ppu: '', stk: '' };
+
+function formKantorPeta() {
+  if (!bolehAturKantor()) return;
+  const d = daftarKantorPeta();
+  const peta = { ppu: d[0], stk: d[1] };
+  _fotoKantor.ppu = peta.ppu.foto || '';
+  _fotoKantor.stk = peta.stk.foto || '';
+
+  const bagian = function (pre, judul, k, warna) {
+    return '<div class="panel mb-3" style="border-left:4px solid ' + warna + ';">' +
+      '<div style="font-weight:700;font-size:13px;margin-bottom:10px;">' + judul + '</div>' +
+      '<div class="form-group"><label class="form-label">Nama Kantor</label>' +
+        '<input class="form-control" id="k' + pre + 'Nama" value="' + esc(k.nama) + '"></div>' +
+      '<div class="form-group"><label class="form-label">Foto / Logo ' +
+        '<span style="font-weight:400;color:var(--text-muted);">— opsional</span></label>' +
+        '<div class="d-flex gap-2 align-center" style="flex-wrap:wrap;">' +
+          '<div id="k' + pre + 'Pratinjau" style="width:44px;height:44px;border-radius:10px;' +
+            'overflow:hidden;border:1px solid var(--border);display:flex;align-items:center;' +
+            'justify-content:center;background:var(--canvas);flex:none;">' +
+            (k.foto
+              ? '<img src="' + esc(normalizeFotoUrl(k.foto)) + '" style="width:100%;height:100%;object-fit:cover;">'
+              : '<i class="bi bi-image" style="color:var(--text-muted);"></i>') +
+          '</div>' +
+          '<input type="file" id="k' + pre + 'Berkas" accept="image/*" style="display:none;" ' +
+            'onchange="unggahFotoKantor(\'' + pre + '\')">' +
+          '<button type="button" class="btn btn-outline btn-sm" id="k' + pre + 'Tombol" ' +
+            'onclick="document.getElementById(\'k' + pre + 'Berkas\').click()">' +
+            '<i class="bi bi-upload"></i> Pilih Foto</button>' +
+          '<button type="button" class="btn btn-outline btn-sm" ' +
+            'onclick="hapusFotoKantor(\'' + pre + '\')">Hapus Foto</button>' +
+        '</div>' +
+        '<div class="login-hint">Tanpa foto, penandanya memakai lambang bawaan. ' +
+          'Ukuran kecil sudah cukup — di peta hanya tampil 44 piksel.</div>' +
+      '</div>' +
+      '<div class="form-group" style="margin-bottom:0;">' +
+        '<label class="form-label">Titik Lokasi</label>' +
+        '<div id="k' + pre + 'Lokasi"></div></div>' +
+    '</div>';
+  };
+
+  const isi =
+    '<div class="login-hint" style="margin-bottom:12px;">Titik kantor berlaku untuk ' +
+      '<b>cabang yang sedang Anda lihat saja</b>. Cabang lain punya titiknya sendiri.</div>' +
+    bagian('ppu', '<i class="bi bi-building-fill"></i> Kantor PPU / Cabang', peta.ppu, KANTOR_WARNA.ppu) +
+    bagian('stk', '<i class="bi bi-briefcase-fill"></i> Kantor Stakeholder', peta.stk, KANTOR_WARNA.stk);
+
+  const footer =
+    '<button class="btn btn-outline" onclick="closeModal(\'modalGeneric\')">Batal</button>' +
+    '<button class="btn btn-primary" id="btnSimpanKantor" onclick="simpanKantorPeta()">' +
+      '<i class="bi bi-save"></i> Simpan</button>';
+
+  openFormModal('Atur Titik Kantor di Peta', isi, footer);
+
+  if (typeof pasangPemilihLokasi === 'function') {
+    pasangPemilihLokasi('kppuLokasi', peta.ppu.lat, peta.ppu.lng);
+    pasangPemilihLokasi('kstkLokasi', peta.stk.lat, peta.stk.lng);
+  }
+}
+
+async function unggahFotoKantor(pre) {
+  const inp = document.getElementById('k' + pre + 'Berkas');
+  const file = inp && inp.files && inp.files[0];
+  if (!file) return;
+  if (file.size > 2 * 1024 * 1024) {
+    showToast('Peringatan', 'Ukuran foto melebihi 2 MB.', 'warning'); return;
+  }
+  const btn = document.getElementById('k' + pre + 'Tombol');
+  setBtnLoading(btn, 'Mengunggah...');
+  try {
+    const base64 = await bacaFileSebagaiBase64(file);
+    // Argumen ke-4 = foto lama, supaya berkasnya dihapus dari Drive dan
+    // tidak menumpuk setiap kali diganti.
+    const res = await panggilAPI('uploadFoto',
+      [base64, 'kantor-' + pre + '-' + Date.now() + '-' + file.name, file.type, _fotoKantor[pre] || '']);
+    resetBtn(btn);
+    if (!res || !res.success || !res.data || !res.data.fotoURL) {
+      showToast('Gagal', (res && res.message) || 'Foto gagal diunggah.', 'danger'); return;
+    }
+    _fotoKantor[pre] = res.data.fotoURL;
+    const pr = document.getElementById('k' + pre + 'Pratinjau');
+    if (pr) pr.innerHTML = '<img src="' + esc(normalizeFotoUrl(res.data.fotoURL)) +
+      '" style="width:100%;height:100%;object-fit:cover;">';
+    showToast('Berhasil', 'Foto terunggah. Jangan lupa tekan Simpan.', 'success');
+  } catch (e) {
+    resetBtn(btn);
+    showToast('Gagal', 'Gagal membaca berkas foto.', 'danger');
+  }
+}
+
+function hapusFotoKantor(pre) {
+  _fotoKantor[pre] = '';
+  const pr = document.getElementById('k' + pre + 'Pratinjau');
+  if (pr) pr.innerHTML = '<i class="bi bi-image" style="color:var(--text-muted);"></i>';
+  showToast('Foto dilepas', 'Penandanya akan memakai lambang bawaan. Tekan Simpan.', 'info');
+}
+
+async function simpanKantorPeta() {
+  const btn = document.getElementById('btnSimpanKantor');
+  const tPpu = (typeof ambilTitikPilihan === 'function') ? ambilTitikPilihan('kppuLokasi') : null;
+  const tStk = (typeof ambilTitikPilihan === 'function') ? ambilTitikPilihan('kstkLokasi') : null;
+  const nilai = {
+    ppuNama: (document.getElementById('kppuNama') || {}).value || '',
+    ppuLat: tPpu ? tPpu.lat : null,
+    ppuLng: tPpu ? tPpu.lng : null,
+    ppuFoto: _fotoKantor.ppu || '',
+    stkNama: (document.getElementById('kstkNama') || {}).value || '',
+    stkLat: tStk ? tStk.lat : null,
+    stkLng: tStk ? tStk.lng : null,
+    stkFoto: _fotoKantor.stk || ''
+  };
+
+  setBtnLoading(btn, 'Menyimpan...');
+  const res = await panggilAPI('setKantorPeta', [nilai]);
+  resetBtn(btn);
+  if (!res || !res.success) {
+    showToast('Gagal', (res && res.message) || 'Titik kantor gagal disimpan.', 'danger');
+    return;
+  }
+
+  // Konfigurasi di memori ikut diperbarui saat itu juga. Tanpa ini, peta
+  // yang digambar ulang sesaat lagi masih memakai nilai yang lama.
+  AppState.config = AppState.config || {};
+  AppState.config.kantorPpuNama = String(nilai.ppuNama || '');
+  AppState.config.kantorPpuLat  = nilai.ppuLat;
+  AppState.config.kantorPpuLng  = nilai.ppuLng;
+  AppState.config.kantorPpuFoto = nilai.ppuFoto;
+  AppState.config.kantorStkNama = String(nilai.stkNama || '');
+  AppState.config.kantorStkLat  = nilai.stkLat;
+  AppState.config.kantorStkLng  = nilai.stkLng;
+  AppState.config.kantorStkFoto = nilai.stkFoto;
+
+  closeModal('modalGeneric');
+  gambarPenandaKantor();
+  showToast('Berhasil', 'Titik kantor tersimpan untuk cabang ini.', 'success');
 }
 
 function isiPopupUMKM(u) {
@@ -709,6 +1032,26 @@ function bukaDetailUMKM(kodeUnik) {
       '<div style="font-size:13px;font-weight:600;">' + (nilai || '-') + '</div></div>';
   };
 
+  // Jarak ke kedua kantor. Tiga keadaan yang masing-masing perlu
+  // kalimatnya sendiri, supaya pembaca tahu mana yang belum diisi:
+  // titik UMKM belum ada, titik kantornya belum ada, atau keduanya ada.
+  const barisJarak = daftarKantorPeta().map(function (k) {
+    const adaKantor = titikSah(k.lat, k.lng);
+    const label = 'Jarak dari ' + esc(k.nama);
+    if (!adaTitik) {
+      return baris(label, '<span style="color:var(--madya-text);">' +
+        'Titik UMKM belum ditandai</span>');
+    }
+    if (!adaKantor) {
+      return baris(label, '<span style="color:var(--madya-text);">' +
+        'Titik kantor belum ditandai</span>');
+    }
+    const km = jarakKm(Number(u.Lat), Number(u.Lng), Number(k.lat), Number(k.lng));
+    return baris(label, teksJarak(km) +
+      ' <span style="font-weight:400;color:var(--text-muted);font-size:11.5px;">' +
+      '(garis lurus)</span>');
+  }).join('');
+
   const isi =
     baris('Kode Unik', esc(u.KodeUnik)) +
     baris('Sektor Usaha', esc(u.SektorUsaha)) +
@@ -718,7 +1061,8 @@ function bukaDetailUMKM(kodeUnik) {
     baris('Status', esc(u.StatusAktif || 'Aktif')) +
     baris('Titik Lokasi', adaTitik
       ? (Number(u.Lat).toFixed(6) + ', ' + Number(u.Lng).toFixed(6))
-      : '<span style="color:var(--madya-text);">Belum ditandai</span>');
+      : '<span style="color:var(--madya-text);">Belum ditandai</span>') +
+    barisJarak;
 
   const footer =
     (adaTitik ? '<a class="btn btn-primary" target="_blank" rel="noopener" ' +

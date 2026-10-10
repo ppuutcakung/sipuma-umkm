@@ -17,13 +17,11 @@ function renderShellPeran() {
     if (sisip > -1) menu.splice(sisip + 1, 0, item); else menu.push(item);
   }
 
-  // Tab "Peta Sebaran UMKM" untuk Admin dan Stakeholder. Disisipkan tepat
-  // setelah menu data utama masing-masing peran, karena peta adalah cara
-  // lain membaca data yang sama — bukan menu tersendiri di paling bawah.
+  // Tab "Peta Sebaran UMKM" untuk Admin dan Stakeholder, diletakkan tepat
+  // di bawah menu laporan pada kedua peran.
   if ((s.role === 'Admin' || s.role === 'UT') &&
       !menu.some(function (m) { return m.id === 'petaUMKM'; })) {
-    const acuan = (s.role === 'Admin') ? 'masterUmkm' : 'dashboard';
-    const sisip = menu.findIndex(function (m) { return m.id === acuan; });
+    const sisip = menu.findIndex(function (m) { return m.id === 'fileLaporan'; });
     const item = { id: 'petaUMKM', label: 'Peta Sebaran UMKM', icon: 'bi-geo-alt-fill', badge: 'Baru' };
     if (sisip > -1) menu.splice(sisip + 1, 0, item); else menu.push(item);
   }

@@ -334,7 +334,7 @@ const AKSI_MENGUBAH = {
   uploadLaporanCSR: 'laporanCsr', updateLaporanCSR: 'laporanCsr', deleteLaporanCSR: 'laporanCsr',
   updateUser: 'users', setStatusAkses: 'users', deleteUser: 'users', updateProfil: 'users',
   setClosing: 'closing', bukaClosing: 'closing',
-  setConfig: 'config', setPeriodeAktif: 'config'
+  setConfig: 'config', setPeriodeAktif: 'config', setKantorPeta: 'config'
 };
 
 // Action lewat GAS yang juga MENGUBAH data. Daftarnya terpisah karena
@@ -535,6 +535,25 @@ async function jalankanAksiFirestore(action, a) {
       const patch = {}; patch[a[0]] = a[1];
       await db.collection('config').doc(cab).set(patch, { merge: true });
       return suksesFS(null, 'Konfigurasi disimpan.');
+    }
+    // Titik kantor PPU dan kantor Stakeholder untuk Peta Sebaran.
+    //
+    // Delapan kolom sekaligus dalam SATU penulisan, bukan delapan kali
+    // setConfig. Selain hemat kuota, cara ini juga membuat penyimpanannya
+    // utuh: tidak mungkin tersimpan separuh bila jaringan putus di tengah.
+    case 'setKantorPeta': {
+      const k = a[0] || {};
+      await db.collection('config').doc(cab).set({
+        kantorPpuNama: String(k.ppuNama || ''),
+        kantorPpuLat:  angkaAtauNull(k.ppuLat),
+        kantorPpuLng:  angkaAtauNull(k.ppuLng),
+        kantorPpuFoto: String(k.ppuFoto || ''),
+        kantorStkNama: String(k.stkNama || ''),
+        kantorStkLat:  angkaAtauNull(k.stkLat),
+        kantorStkLng:  angkaAtauNull(k.stkLng),
+        kantorStkFoto: String(k.stkFoto || '')
+      }, { merge: true });
+      return suksesFS(null, 'Titik kantor berhasil disimpan.');
     }
     case 'setPeriodeAktif': {
       const th = Number(a[0]);
