@@ -1,0 +1,21 @@
+# Berkas yang TIDAK ikut disajikan Vercel.
+#
+# Selama ini GitHub Pages menyajikan SELURUH isi repo apa adanya — termasuk
+# salinan kode Apps Script. Siapa pun yang menebak alamatnya bisa membaca
+# seluruh cara kerja sisi server SIPUMA: nama setiap perintah, siapa yang
+# boleh memanggilnya, dan di mana pemeriksaannya dilakukan.
+#
+# Tidak ada kata sandi atau kunci di dalamnya (semuanya disimpan di Script
+# Properties milik Apps Script, bukan di dalam kode), jadi ini bukan keadaan
+# darurat. Tetapi tidak ada alasan juga untuk membagikannya.
+#
+# Catatan: untuk penyebaran lewat GitHub, berkas ini belum tentu cukup
+# sendirian. Karena itu vercel.json juga memasang pengalihan untuk
+# /BACKEND-APPS-SCRIPT — dua lapis untuk satu hal yang sama, supaya tidak
+# bergantung pada satu mekanisme saja.
+
+BACKEND-APPS-SCRIPT
+
+# Dokumen kerja — tidak ada gunanya disajikan sebagai halaman web.
+*.md
+PRD-*
