@@ -219,7 +219,11 @@ function legalitasKeLama(l) {
   return {
     ID: l._id, IDUMKM: l.idUmkm, NamaUMKM: l.namaUMKM, JenisLegalitas: l.jenis,
     NomorLegalitas: l.nomor, TanggalTerbit: l.terbit, TanggalKadaluarsa: l.kadaluarsa,
-    SeumurHidup: l.seumurHidup ? 'Ya' : 'Tidak', Penerbit: l.penerbit, Catatan: l.catatan
+    SeumurHidup: l.seumurHidup ? 'Ya' : 'Tidak', Penerbit: l.penerbit, Catatan: l.catatan,
+    // Kapan legalitas ini terakhir diperbarui — diisi Admin setelah UMKM
+    // selesai mengurus sertifikat barunya. Baris lama belum punya kolom
+    // ini, dan itu wajar: hasilnya null, dan di tabel tampil sebagai "—".
+    TanggalPembaruan: l.tanggalPembaruan || null
   };
 }
 
@@ -891,7 +895,9 @@ async function jalankanAksiFirestore(action, a) {
         jenis: r.JenisLegalitas, nomor: r.NomorLegalitas || '',
         terbit: r.TanggalTerbit ? new Date(r.TanggalTerbit) : null,
         kadaluarsa: sh ? null : new Date(r.TanggalKadaluarsa),
-        seumurHidup: sh, penerbit: r.Penerbit || '', catatan: r.Catatan || ''
+        seumurHidup: sh, penerbit: r.Penerbit || '', catatan: r.Catatan || '',
+        // Data yang baru dimasukkan belum pernah diperbarui.
+        tanggalPembaruan: null
       });
       return suksesFS(r, 'Data legalitas berhasil disimpan.');
     }
@@ -899,12 +905,28 @@ async function jalankanAksiFirestore(action, a) {
       const r = a[0];
       const sh = r.SeumurHidup === true || String(r.SeumurHidup) === 'true';
       if (!sh && !r.TanggalKadaluarsa) return gagalFS('Isi tanggal kadaluarsa, atau centang "Berlaku seumur hidup".');
-      await db.collection('legalitas').doc(r.ID).set({
+
+      const patchLegal = {
         jenis: r.JenisLegalitas, nomor: r.NomorLegalitas || '',
         terbit: r.TanggalTerbit ? new Date(r.TanggalTerbit) : null,
         kadaluarsa: sh ? null : new Date(r.TanggalKadaluarsa),
         seumurHidup: sh, penerbit: r.Penerbit || '', catatan: r.Catatan || ''
-      }, { merge: true });
+      };
+
+      // Tanggal pembaruan disentuh HANYA bila pengirimnya memang
+      // menyertakannya. Formulir tidak menampilkan isian itu untuk
+      // legalitas yang sudah Aktif — dan karena memperbarui sebuah
+      // legalitas justru membuatnya Aktif, menulis nilai kosong di sini
+      // akan menghapus catatan pembaruan pada suntingan berikutnya yang
+      // paling sepele sekalipun. Dengan merge, kolom yang tidak disebut
+      // tetap utuh apa adanya.
+      if (r.TanggalPembaruan !== undefined) {
+        patchLegal.tanggalPembaruan = r.TanggalPembaruan
+          ? new Date(r.TanggalPembaruan)
+          : null;
+      }
+
+      await db.collection('legalitas').doc(r.ID).set(patchLegal, { merge: true });
       return suksesFS(r, 'Data legalitas berhasil diperbarui.');
     }
     case 'deleteLegalitas':

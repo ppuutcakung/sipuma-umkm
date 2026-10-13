@@ -60,6 +60,25 @@ function lencanaStatusLegalitas(l) {
   return '<span class="tier-score-pill tier-' + cls + '">' + esc(l.Status) + '</span>';
 }
 
+/**
+ * Legalitas ini sedang dalam keadaan yang perlu diurus?
+ *
+ * Kolom pencatatan pembaruan hanya muncul untuk keadaan ini. Yang sudah
+ * Aktif tidak perlu — tidak ada yang sedang diperbarui, dan menambahkan
+ * kolom kosong di situ hanya membuat formulirnya panjang tanpa guna.
+ */
+function legalitasPerluDiurus(l) {
+  return !!l && (l.Status === 'Perlu Diperbarui' || l.Status === 'Kadaluarsa');
+}
+
+/** Keterangan tanggal pembaruan untuk kolom tabel. */
+function teksPembaruanLegalitas(l) {
+  if (!l.TanggalPembaruan) {
+    return '<span class="text-muted" style="font-size:11.5px;">—</span>';
+  }
+  return '<span style="font-size:12px;">' + esc(formatTgl(l.TanggalPembaruan)) + '</span>';
+}
+
 /** Keterangan masa berlaku yang mudah dipahami. */
 function keteranganMasaBerlaku(l) {
   if (l.IsSeumurHidup) return 'Berlaku seumur hidup';
@@ -152,10 +171,21 @@ function renderLegalitasTabel(halaman) {
              String(l.NomorLegalitas || '').toLowerCase().includes(kunci);
     });
   }
-  // Paling mendesak di atas: kadaluarsa, lalu yang paling dekat masa habisnya
+  // Paling mendesak di atas: kadaluarsa, lalu yang paling dekat masa habisnya.
+  //
+  // ⚠️ Perhatikan `peringkat()` di bawah, dan JANGAN kembalikan ke `|| 3`.
+  // Peringkat Kadaluarsa adalah angka NOL, dan nol dianggap "kosong" oleh
+  // operator `||` — sehingga `urutan[status] || 3` memberi Kadaluarsa
+  // peringkat 3, yaitu PALING BAWAH. Persis kebalikan dari yang tertulis
+  // di kalimat pertama komentar ini: yang paling mendesak justru terdorong
+  // ke halaman terakhir, dan di tab yang gunanya memang mengejar legalitas
+  // kadaluarsa, itu membuat daftarnya menyesatkan.
   const urutan = { 'Kadaluarsa': 0, 'Perlu Diperbarui': 1, 'Aktif': 2 };
+  const peringkat = function (status) {
+    return (urutan[status] === undefined) ? 3 : urutan[status];
+  };
   rows.sort(function (a, b) {
-    const d = (urutan[a.Status] || 3) - (urutan[b.Status] || 3);
+    const d = peringkat(a.Status) - peringkat(b.Status);
     if (d !== 0) return d;
     return (a.SisaHari === null ? 99999 : a.SisaHari) - (b.SisaHari === null ? 99999 : b.SisaHari);
   });
@@ -168,12 +198,15 @@ function renderLegalitasTabel(halaman) {
   // Kolom Aksi hanya ada untuk yang berhak mengubah. Stakeholder tidak
   // sekadar tombolnya disembunyikan — kolomnya memang tidak digambar.
   const bolehUbah = bolehUbahLegalitas();
-  const jumlahKolom = bolehUbah ? 6 : 5;
+  // Kolom "Diperbarui" tampil untuk SEMUA peran. Isinya hanya keterangan,
+  // tidak ada tombol di dalamnya, jadi aman dilihat Stakeholder — dan
+  // justru merekalah yang paling butuh bukti bahwa pengurusannya berjalan.
+  const jumlahKolom = bolehUbah ? 7 : 6;
 
   area.innerHTML =
     '<div style="overflow-x:auto;"><table class="sipuma-table">' +
       '<thead><tr><th>UMKM</th><th>Jenis Legalitas</th><th>Nomor</th><th>Masa Berlaku</th><th>Status</th>' +
-        (bolehUbah ? '<th>Aksi</th>' : '') + '</tr></thead>' +
+        '<th>Diperbarui</th>' + (bolehUbah ? '<th>Aksi</th>' : '') + '</tr></thead>' +
       '<tbody>' +
       (hal.length ? hal.map(function (l) {
         return '<tr>' +
@@ -182,13 +215,14 @@ function renderLegalitasTabel(halaman) {
           '<td>' + esc(l.NomorLegalitas || '-') + '</td>' +
           '<td style="font-size:12px;">' + esc(keteranganMasaBerlaku(l)) + '</td>' +
           '<td>' + lencanaStatusLegalitas(l) + '</td>' +
+          '<td>' + teksPembaruanLegalitas(l) + '</td>' +
           (bolehUbah
             ? '<td>' +
                 (l.Status !== 'Aktif'
-                  ? '<button class="action-icon-btn" style="color:#25D366;border-color:#25D366;" title="Kirim pengingat WhatsApp" onclick="kirimPengingatWA(\'' + esc(l.ID) + '\')"><i class="bi bi-whatsapp"></i></button>'
+                  ? '<button class="action-icon-btn" style="color:#25D366;border-color:#25D366;" title="Kirim pengingat WhatsApp" data-id="' + esc(l.ID) + '" onclick="kirimPengingatWA(this.dataset.id)"><i class="bi bi-whatsapp"></i></button>'
                   : '') +
-                '<button class="action-icon-btn primary" title="Ubah" onclick=\'formLegalitas(' + JSON.stringify(l) + ')\'><i class="bi bi-pencil"></i></button>' +
-                '<button class="action-icon-btn danger" title="Hapus" onclick="hapusLegalitas(\'' + esc(l.ID) + '\')"><i class="bi bi-trash"></i></button>' +
+                '<button class="action-icon-btn primary" title="Ubah" data-id="' + esc(l.ID) + '" onclick="ubahLegalitasDariTabel(this)"><i class="bi bi-pencil"></i></button>' +
+                '<button class="action-icon-btn danger" title="Hapus" data-id="' + esc(l.ID) + '" onclick="hapusLegalitas(this.dataset.id)"><i class="bi bi-trash"></i></button>' +
               '</td>'
             : '') +
           '</tr>';
@@ -202,6 +236,39 @@ function renderLegalitasTabel(halaman) {
           return '<button class="btn ' + (p === halaman ? 'btn-primary' : 'btn-outline') + ' btn-sm" onclick="renderLegalitasTabel(' + p + ')">' + p + '</button>';
         }).join('') + '</div>'
       : '');
+}
+
+/**
+ * Buka formulir ubah dari tombol barisnya.
+ *
+ * Dulu seluruh isi baris ditempelkan langsung ke dalam atribut onclick.
+ * Cara itu bekerja sampai ada nama UMKM yang mengandung tanda petik:
+ * petiknya menutup atribut lebih awal, perintahnya rusak, dan tombolnya
+ * mati total tanpa pesan apa pun. Kerusakan yang sama pernah ditemukan di
+ * Data Master, Manajemen User, dan Catatan Prestasi.
+ *
+ * Sekarang tombol hanya membawa PENANDA barisnya di atribut data-, lalu
+ * barisnya dicari dari ingatan aplikasi. Nilai di dalam atribut data-
+ * tidak pernah dibaca sebagai perintah, jadi petik, kutip ganda, & dan <
+ * semuanya aman.
+ */
+function ubahLegalitasDariTabel(tombol) {
+  const id = tombol && tombol.dataset ? tombol.dataset.id : '';
+  const l = (AppState.cache.legalitas || []).find(function (x) {
+    return String(x.ID) === String(id);
+  });
+  if (!l) {
+    showToast('Tidak ditemukan',
+      'Data legalitas itu tidak ada lagi di daftar. Muat ulang halaman lalu coba lagi.', 'warning');
+    return;
+  }
+  formLegalitas(l);
+}
+
+/** Isi kolom Tanggal Diperbarui dengan tanggal hari ini. */
+function isiPembaruanHariIni() {
+  const el = document.getElementById('legalDiperbarui');
+  if (el) el.value = formatTglUntukInput(new Date());
 }
 
 function formLegalitas(data) {
@@ -243,6 +310,32 @@ function formLegalitas(data) {
       '<div class="form-group"><label class="form-label">Catatan (opsional)</label>' +
         '<input class="form-control" id="legalCatatan" value="' + (isEdit ? esc(data.Catatan || '') : '') + '"></div>' +
     '</div>' +
+    // ── Pencatatan pembaruan ──
+    // Hanya muncul untuk legalitas yang memang sedang perlu diurus. Pada
+    // yang sudah Aktif, bagian ini TIDAK digambar sama sekali — dan itu
+    // membawa satu akibat yang harus ditangani di simpanLegalitas():
+    // isiannya tidak ada di layar, jadi penyimpanan tidak boleh ikut
+    // mengosongkan tanggal yang sudah tercatat sebelumnya.
+    (legalitasPerluDiurus(data)
+      ? '<div class="panel mt-1 mb-3" style="border-left:4px solid #B45309;background:var(--canvas);">' +
+          '<div style="font-weight:700;font-size:13px;margin-bottom:4px;">' +
+            '<i class="bi bi-arrow-repeat"></i> Pencatatan Pembaruan</div>' +
+          '<div class="login-hint" style="margin-bottom:10px;">Diisi <b>setelah</b> UMKM selesai mengurus ' +
+            'ke dinas terkait dan sertifikat barunya terbit. Jangan lupa memperbarui juga Nomor, ' +
+            'Tanggal Terbit, dan Tanggal Kadaluarsa di atas dengan data sertifikat yang baru — ' +
+            'statusnya akan kembali Aktif dengan sendirinya.</div>' +
+          '<div class="form-group" style="margin-bottom:0;">' +
+            '<label class="form-label">Tanggal Diperbarui</label>' +
+            '<div class="d-flex gap-2" style="flex-wrap:wrap;">' +
+              '<input type="date" class="form-control" id="legalDiperbarui" style="flex:1;min-width:180px;" value="' +
+                (isEdit && data.TanggalPembaruan ? formatTglUntukInput(data.TanggalPembaruan) : '') + '">' +
+              '<button type="button" class="btn btn-outline" onclick="isiPembaruanHariIni()">Hari ini</button>' +
+            '</div>' +
+            '<div class="login-hint">Boleh dikosongkan bila pengurusannya belum selesai. ' +
+              'Tanggal ini tercatat di kolom <b>Diperbarui</b> pada tabel.</div>' +
+          '</div>' +
+        '</div>'
+      : '') +
     '<div class="text-muted" style="font-size:11.5px;background:var(--canvas);padding:9px 12px;border-radius:8px;">' +
       '<b>Aturan status otomatis:</b> seumur hidup atau sisa berlaku lebih dari 1 tahun → <b>Aktif</b>. ' +
       'Sisa 1 tahun atau kurang → <b>Perlu Diperbarui</b>. Lewat tanggal batas → <b>Kadaluarsa</b>.' +
@@ -283,6 +376,21 @@ function simpanLegalitas(isEdit) {
     Catatan: document.getElementById('legalCatatan').value.trim()
   };
   if (isEdit) record.ID = document.getElementById('legalId').value;
+
+  // Tanggal pembaruan HANYA disertakan bila isiannya memang ada di layar.
+  //
+  // Ini bukan kerapian, melainkan keharusan. Bagian pencatatan pembaruan
+  // tidak digambar untuk legalitas yang sudah Aktif — dan begitu sebuah
+  // legalitas diperbarui, statusnya memang menjadi Aktif. Kalau kolomnya
+  // tetap dikirim sebagai nilai kosong, maka suntingan berikutnya sekecil
+  // apa pun — memperbaiki satu salah ketik pada nomor, misalnya — akan
+  // MENGHAPUS tanggal pembaruan yang sudah susah payah dicatat.
+  //
+  // Dengan tidak menyertakannya, lapisan Firestore membiarkan nilai lama
+  // apa adanya. Bila isiannya ada tetapi dikosongkan pengguna, barulah
+  // nilainya memang dihapus — dan itu memang yang dimaksudkan.
+  const elPembaruan = document.getElementById('legalDiperbarui');
+  if (elPembaruan) record.TanggalPembaruan = elPembaruan.value;
 
   setBtnLoading(btn);
   panggilServerAman(isEdit ? 'updateLegalitas' : 'addLegalitas', [record], function (res) {
