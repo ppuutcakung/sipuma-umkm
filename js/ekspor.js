@@ -373,6 +373,39 @@ function eksporRekapAsesmen(format) {
     '\n' + ringkasSektor);
 }
 
+/** Rekap Asesmen Kemandirian — versi UT */
+function eksporRekapAsesmenUT(format) {
+  const aktif = daftarKodeUmkmAktif();
+  const rows = (AppState.cache.kemandirianUTAll || [])
+    .filter(function (r) { return aktif.indexOf(r.IDUMKM) > -1; })
+    .sort(function (a, b) { return (Number(b.Total) || 0) - (Number(a.Total) || 0); });
+
+  // Sebaran per kelas, memakai urutan kelas versi UT dari terendah ke
+  // tertinggi — sama susunannya dengan panduan skala di layar.
+  const jumlahKelas = {};
+  KELAS_UT.forEach(function (k) { jumlahKelas[k.nama] = 0; });
+  rows.forEach(function (r) {
+    if (jumlahKelas[r.Kelas] !== undefined) jumlahKelas[r.Kelas]++;
+  });
+  const ringkas = KELAS_UT.map(function (k) {
+    return (k.nama + ' (nilai ' + k.teks + ')').padEnd(32, ' ') + jumlahKelas[k.nama] + ' UMKM';
+  }).join('\n');
+
+  const kolom = ['No', 'Nama UMKM', 'Kuantitatif'].concat(
+    ASPEK_UT.map(function (a) { return a.label.replace('Aspek ', ''); }),
+    ['Kualitatif', 'Total', 'Kelas', 'Bulan Asesmen', 'Asesor']);
+  const lebar = [5, 26, 12].concat(ASPEK_UT.map(function () { return 12; }),
+                                   [11, 9, 16, 18]);
+  const baris = rows.map(function (r, i) {
+    return [i + 1, r.NamaUMKM, r.Kuantitatif].concat(
+      ASPEK_UT.map(function (a) { return r['Aspek_' + a.kunci]; }),
+      [r.Kualitatif, r.Total, r.Kelas, formatBulanTahun(r.TanggalAsesmen), r.Asesor || '-']);
+  });
+
+  jalankanEkspor(format, 'Rekap Asesmen Kemandirian UMKM - Versi UT', kolom, baris, lebar,
+    'Jumlah UMKM yang telah diasesmen versi UT: ' + rows.length + '\n' + ringkas);
+}
+
 /** Legalitas UMKM */
 function eksporLegalitas(format) {
   const aktifL = daftarKodeUmkmAktif();

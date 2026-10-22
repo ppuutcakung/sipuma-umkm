@@ -199,6 +199,89 @@ function kemandirianKeLama(k) {
   };
 }
 
+// ════════════════════════════════════════════════════════
+// ASESMEN VERSI UT
+// ════════════════════════════════════════════════════════
+// PPU UT Cakung memakai DUA versi asesmen berdampingan:
+//
+//   • Versi YDBA — tiga pilar (Produksi, Pemasaran, Keuangan), dirata-rata.
+//     Kelasnya: Pemula / Madya / Pra Mandiri / Mandiri. Tidak diubah.
+//   • Versi UT   — satu indikator kuantitatif ditambah enam aspek
+//     kualitatif, DIJUMLAHKAN (bukan dirata-rata). Kelasnya: Junior /
+//     Middle / Futurepreneur / Independent.
+//
+// Keduanya disimpan di koleksi yang BERBEDA, dan itu disengaja. Satu UMKM
+// bisa punya hasil kedua versi pada saat yang sama, dan keduanya tampil di
+// dua tabel rekap yang berdampingan. Kalau ditumpuk dalam satu dokumen,
+// menyimpan yang satu akan menghapus yang lain — dan rekap lamanya
+// kehilangan baris tanpa pemberitahuan apa pun.
+//
+// Didefinisikan di berkas ini, bukan di halaman.js, karena berkas ini
+// dimuat LEBIH DULU — sehingga formulir dan penyimpanan memakai satu
+// sumber angka yang sama. Dulu ambang batas versi YDBA pernah ditulis
+// dua kali dengan nilai berbeda, dan akibatnya kelas UMKM tampak tidak
+// pernah berubah meski skornya naik. Satu definisi, satu kebenaran.
+
+const ASPEK_UT = [
+  { kunci: 'hukum',     label: 'Aspek Hukum' },
+  { kunci: 'pasar',     label: 'Aspek Pasar' },
+  { kunci: 'produksi',  label: 'Aspek Produksi' },
+  { kunci: 'manajemen', label: 'Aspek Manajemen' },
+  { kunci: 'keuangan',  label: 'Aspek Keuangan' },
+  { kunci: 'sosek',     label: 'Aspek Sosek dan Lingkungan' }
+];
+
+const KELAS_UT = [
+  { nama: 'Junior',         batas: 55,  teks: '0–55'   },
+  { nama: 'Middle',         batas: 70,  teks: '56–70'  },
+  { nama: 'Futurepreneur',  batas: 80,  teks: '71–80'  },
+  { nama: 'Independent',    batas: 100, teks: '81–100' }
+];
+
+/** Tentukan kelas versi UT dari NILAI TOTAL (bukan rata-rata). */
+function hitungKelasUT(total) {
+  const t = Number(total) || 0;
+  for (let i = 0; i < KELAS_UT.length; i++) {
+    if (t <= KELAS_UT[i].batas) return KELAS_UT[i].nama;
+  }
+  // Di atas 100 — di luar skala, tetapi tetap diberi kelas tertinggi
+  // daripada mengembalikan nilai kosong yang merusak tampilan.
+  return KELAS_UT[KELAS_UT.length - 1].nama;
+}
+
+/** Bulatkan ke dua angka di belakang koma, sesuai bentuk nilai asesmen UT. */
+function bulatkanUT(n) {
+  return Math.round((Number(n) || 0) * 100) / 100;
+}
+
+/** Hitung kualitatif (jumlah enam aspek) dan total dari satu catatan. */
+function hitungNilaiUT(sumber, ambil) {
+  const kuantitatif = bulatkanUT(ambil('kuantitatif'));
+  let kualitatif = 0;
+  const aspek = {};
+  ASPEK_UT.forEach(function (a) {
+    const v = bulatkanUT(ambil(a.kunci));
+    aspek[a.kunci] = v;
+    kualitatif += v;
+  });
+  kualitatif = bulatkanUT(kualitatif);
+  const total = bulatkanUT(kuantitatif + kualitatif);
+  return { kuantitatif: kuantitatif, aspek: aspek, kualitatif: kualitatif, total: total };
+}
+
+function kemandirianUTKeLama(k) {
+  const hasil = {
+    ID: k._id, IDUMKM: k.idUmkm, NamaUMKM: k.namaUMKM,
+    Kuantitatif: k.kuantitatif, Kualitatif: k.kualitatif, Total: k.total,
+    Kelas: k.kelas, SaranProgram: k.saranProgram,
+    Asesor: k.asesor, TanggalAsesmen: k.tanggalAsesmen
+  };
+  ASPEK_UT.forEach(function (a) {
+    hasil['Aspek_' + a.kunci] = k[a.kunci];
+  });
+  return hasil;
+}
+
 function fasilitasiKeLama(f) {
   return {
     ID: f._id, IDUMKM: f.idUmkm, NamaUMKM: f.namaUMKM, NamaCustomer: f.namaCustomer,
@@ -331,7 +414,7 @@ const AKSI_MENGUBAH = {
   addUMKM: 'umkm', updateUMKM: 'umkm', deleteUMKM: 'umkm', setStatusAktifUMKM: 'umkm',
   saveOmset: 'omset', deleteOmset: 'omset',
   saveTenagaKerja: 'tenagaKerja',
-  saveKemandirian: 'kemandirian',
+  saveKemandirian: 'kemandirian', saveKemandirianUT: 'kemandirianUT',
   addFasilitasi: 'fasilitasi',
   addPrestasi: 'prestasi', updatePrestasi: 'prestasi', deletePrestasi: 'prestasi',
   addLegalitas: 'legalitas', updateLegalitas: 'legalitas', deleteLegalitas: 'legalitas',
@@ -419,6 +502,10 @@ const CACHE_HALAMAN_PER_KOLEKSI = {
   omset:       ['omsetAll', 'dashboardOrganisasi'],
   tenagaKerja: ['tenagaKerjaAll', 'tenagaKerjaPerUmkmTahun', 'dashboardOrganisasi'],
   kemandirian: ['kemandirianAll', 'kemandirianPerUmkm', 'dashboardOrganisasi'],
+  // Versi UT tidak menyentuh dasbor: angka dasbor memakai kelas versi
+  // YDBA, dan menambahkannya di sini hanya memaksa pembacaan ulang
+  // seluruh delapan koleksi tanpa ada yang berubah di layar.
+  kemandirianUT: ['kemandirianUTAll', 'kemandirianUTPerUmkm'],
   fasilitasi:  ['fasilitasi', 'dashboardOrganisasi'],
   prestasi:    ['prestasi', 'dashboardOrganisasi'],
   legalitas:   ['legalitas', 'dashboardOrganisasi'],
@@ -429,7 +516,7 @@ const CACHE_HALAMAN_PER_KOLEKSI = {
 };
 
 // Kunci cache yang berisi peta (bukan daftar) dikosongkan jadi {}, bukan null.
-const CACHE_BERBENTUK_PETA = ['kemandirianPerUmkm', 'tenagaKerjaPerUmkmTahun'];
+const CACHE_BERBENTUK_PETA = ['kemandirianPerUmkm', 'kemandirianUTPerUmkm', 'tenagaKerjaPerUmkmTahun'];
 
 /** Kosongkan cache halaman untuk satu koleksi saja. null = semuanya. */
 function kosongkanCacheHalaman(koleksi) {
@@ -464,7 +551,7 @@ function segarkanSetelahUbah(action) {
 }
 
 // Pengisian data hanya untuk UMKM yang berstatus AKTIF.
-const AKSI_WAJIB_UMKM_AKTIF = ['saveOmset', 'saveTenagaKerja', 'saveKemandirian',
+const AKSI_WAJIB_UMKM_AKTIF = ['saveOmset', 'saveTenagaKerja', 'saveKemandirian', 'saveKemandirianUT',
                                'addFasilitasi', 'addPrestasi', 'addLegalitas'];
 
 /** Pastikan UMKM sasaran masih aktif sebelum datanya diubah. */
@@ -692,7 +779,7 @@ async function jalankanAksiFirestore(action, a) {
       const umkmDoc = await db.collection('umkm').doc(kode).get();
       const nama = umkmDoc.exists ? (umkmDoc.data().namaUMKM || '') : '';
       // Hapus seluruh data terkait, seperti perilaku cascade sebelumnya
-      const koleksiTerkait = ['omset', 'tenagaKerja', 'kemandirian', 'fasilitasi', 'prestasi', 'legalitas', 'closing'];
+      const koleksiTerkait = ['omset', 'tenagaKerja', 'kemandirian', 'kemandirianUT', 'fasilitasi', 'prestasi', 'legalitas', 'closing'];
       for (const k of koleksiTerkait) {
         const snap = await saringPeran(db.collection(k).where('idUmkm', '==', kode)).get();
         const batch = db.batch();
@@ -819,6 +906,40 @@ async function jalankanAksiFirestore(action, a) {
     case 'getAllKelasKemandirian': {
       const rows = await ambilKoleksi('kemandirian');
       return suksesFS(rows.map(kemandirianKeLama), 'OK');
+    }
+
+    // ── Kemandirian versi UT (koleksi tersendiri) ──
+    case 'getKemandirianUTUMKM': {
+      const d = await db.collection('kemandirianUT').doc(a[0]).get();
+      return suksesFS(d.exists ? kemandirianUTKeLama(dokKeObjek(d)) : null, 'OK');
+    }
+    case 'saveKemandirianUT': {
+      const r = a[0];
+      const n = hitungNilaiUT(r, function (kunci) {
+        return kunci === 'kuantitatif' ? r.Kuantitatif : r['Aspek_' + kunci];
+      });
+      const kelas = hitungKelasUT(n.total);
+
+      const isi = {
+        cabang: cab, idUmkm: r.IDUMKM, namaUMKM: r.NamaUMKM || '',
+        kuantitatif: n.kuantitatif, kualitatif: n.kualitatif,
+        total: n.total, kelas: kelas,
+        saranProgram: r.SaranProgram || '', asesor: r.Asesor || '',
+        // Dikirim sebagai TEKS 'YYYY-MM' dari formulir, bukan objek Date —
+        // pelajaran dari galat "illegal value in property" dulu.
+        tanggalAsesmen: r.TanggalAsesmen
+          ? new Date(String(r.TanggalAsesmen).length === 7 ? r.TanggalAsesmen + '-01' : r.TanggalAsesmen)
+          : new Date()
+      };
+      ASPEK_UT.forEach(function (a2) { isi[a2.kunci] = n.aspek[a2.kunci]; });
+
+      await db.collection('kemandirianUT').doc(r.IDUMKM).set(isi, { merge: true });
+      return suksesFS(kemandirianUTKeLama(Object.assign({ _id: r.IDUMKM }, isi)),
+        'Asesmen versi UT berhasil disimpan: ' + kelas + ' (nilai ' + n.total + ').');
+    }
+    case 'getAllKemandirianUT': {
+      const rows = await ambilKoleksi('kemandirianUT');
+      return suksesFS(rows.map(kemandirianUTKeLama), 'OK');
     }
 
     // ── Fasilitasi ──
@@ -1398,7 +1519,8 @@ async function susunDashboardUMKM(kodeDiminta, tahunDiminta) {
 /** Cadangan seluruh koleksi — tanpa kredensial, seperti versi sebelumnya. */
 async function susunCadangan() {
   const koleksi = ['cabang', 'users', 'umkm', 'omset', 'tenagaKerja', 'kemandirian',
-                   'fasilitasi', 'prestasi', 'legalitas', 'laporanCsr', 'closing', 'config'];
+                   'kemandirianUT', 'fasilitasi', 'prestasi', 'legalitas', 'laporanCsr',
+                   'closing', 'config'];
   const sheets = {};
   for (const k of koleksi) {
     try {

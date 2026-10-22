@@ -893,6 +893,13 @@ function renderKemandirianForm(kodeUmkm) {
     <div class="grid grid-1-2">
       <div class="panel">
         <div class="form-group"><label class="form-label">Pilih UMKM</label>${dropdownUmkmCari('kkUmkmSelect', kodeUmkm, "renderKemandirianForm(document.getElementById('kkUmkmSelect').value)")}</div>
+        <div class="form-group"><label class="form-label">Versi Asesmen</label>
+          <select class="form-select" id="kkVersi" onchange="gantiVersiAsesmen()">
+            <option value="YDBA"${_versiAsesmen === 'YDBA' ? ' selected' : ''}>Versi YDBA — 3 pilar (Produksi, Pemasaran, Keuangan)</option>
+            <option value="UT"${_versiAsesmen === 'UT' ? ' selected' : ''}>Versi UT — kuantitatif + 6 aspek kualitatif</option>
+          </select>
+          <div class="login-hint">Hasil kedua versi disimpan terpisah dan tidak saling menimpa. Masing-masing punya tabel rekapnya sendiri.</div>
+        </div>
         <div id="kkFormArea"><div class="loading-inline"><div class="spinner"></div></div></div>
       </div>
       <div class="panel">
@@ -915,11 +922,65 @@ function renderKemandirianForm(kodeUmkm) {
           </div>
           <div id="kkRekapArea" class="mt-2"><div class="loading-inline"><div class="spinner"></div></div></div>
         </div>
+
+        <div class="mt-4" style="border-top:1px solid var(--border);padding-top:16px;">
+          <div class="panel-title" style="font-size:14px;">Panduan Skala Kelas — Versi UT</div>
+          <div class="grid grid-2 mt-2">
+            ${KELAS_UT.map(k => tierMiniLegendUT(k.nama, k.teks)).join('')}
+          </div>
+          <div class="text-muted mt-3" style="font-size:12px;">Nilai versi UT adalah <b>penjumlahan</b> — indikator kuantitatif ditambah enam aspek kualitatif — bukan rata-rata seperti versi YDBA.</div>
+          <div class="mt-4">
+            <div class="flex-between mb-2" style="flex-wrap:wrap;gap:8px;">
+              <div class="panel-title mb-0" style="font-size:14px;">Rekap Kelas Kemandirian UMKM — Versi UT</div>${tombolEkspor('eksporRekapAsesmenUT')}
+              <select class="form-select" id="kkFilterKelasUT" style="width:auto;min-width:160px;" onchange="renderRekapKemandirianUT(1, this.value)">
+                <option value="">Semua Status</option>
+                ${KELAS_UT.map(k => `<option value="${k.nama}">${k.nama}</option>`).join('')}
+              </select>
+            </div>
+            <div id="kkRekapAreaUT" class="mt-2"><div class="loading-inline"><div class="spinner"></div></div></div>
+          </div>
+        </div>
       </div>
     </div>
   `;
   muatFormKemandirian(kodeUmkm);
   muatRekapKemandirian(1);
+  muatRekapKemandirianUT(1);
+}
+
+/**
+ * Versi asesmen yang sedang dipakai di layar: 'YDBA' atau 'UT'.
+ *
+ * Sengaja disimpan di luar fungsi supaya pilihannya BERTAHAN saat berpindah
+ * dari satu UMKM ke UMKM berikutnya. Asesor biasanya mengerjakan satu versi
+ * untuk banyak UMKM sekaligus; memaksanya memilih ulang setiap kali hanya
+ * mengundang salah isi.
+ */
+let _versiAsesmen = 'YDBA';
+
+function gantiVersiAsesmen() {
+  const sel = document.getElementById('kkVersi');
+  _versiAsesmen = sel ? sel.value : 'YDBA';
+  const kodeUmkm = document.getElementById('kkUmkmSelect')
+    ? document.getElementById('kkUmkmSelect').value : '';
+  muatFormKemandirian(kodeUmkm);
+}
+
+/** Lencana kecil panduan skala untuk kelas versi UT. */
+function tierMiniLegendUT(nama, skor) {
+  return `<div class="tier-card" style="padding:10px;"><span class="tier-name"><span class="dot dot-${tierClassUT(nama)}"></span>${esc(nama)}</span><div class="text-muted mt-2" style="font-size:11.5px;">Nilai ${esc(skor)}</div></div>`;
+}
+
+/**
+ * Warna untuk kelas versi UT.
+ *
+ * Memakai ulang empat warna yang sudah ada di style.css, berurutan dari
+ * terendah ke tertinggi — jadi tidak ada satu baris pun CSS yang perlu
+ * ditambahkan, dan tampilannya langsung senada dengan tabel sebelahnya.
+ */
+function tierClassUT(nama) {
+  return { 'Junior': 'pemula', 'Middle': 'madya',
+           'Futurepreneur': 'pramandiri', 'Independent': 'mandiri' }[nama] || 'madya';
 }
 function tierMiniLegend(nama, skor) {
   const cls = tierClass(nama);
@@ -977,7 +1038,63 @@ function renderRekapKemandirian(halaman, filterKelas) {
   `;
 }
 
+// ── Rekap Kelas Kemandirian versi UT ──
+// Bentuknya sengaja dibuat sama persis dengan rekap versi YDBA di atas,
+// supaya keduanya bisa dibaca berdampingan tanpa perlu menyesuaikan mata.
+// Bedanya hanya dua: nama kelasnya, dan kolom nilainya memakai TOTAL
+// (penjumlahan), bukan rata-rata.
+function muatRekapKemandirianUT(halaman) {
+  const sec = AppState.currentSection;
+  const area = document.getElementById('kkRekapAreaUT');
+  if (!area) return;
+  if (AppState.cache.kemandirianUTAll) { renderRekapKemandirianUT(halaman, ''); return; }
+  panggilServerAman('getAllKemandirianUT', [], (res) => {
+    if (AppState.currentSection !== sec) return;
+    AppState.cache.kemandirianUTAll = res.success ? parseJsonAman(res.data, []) : [];
+    renderRekapKemandirianUT(halaman, '');
+  }, () => {
+    if (AppState.currentSection !== sec) return;
+    area.innerHTML = `<div class="table-empty"><i class="bi bi-wifi-off"></i>Gagal memuat rekap versi UT. <button class="btn btn-outline btn-sm mt-2" onclick="AppState.cache.kemandirianUTAll=null;muatRekapKemandirianUT(1)">Coba Lagi</button></div>`;
+  });
+}
+
+function renderRekapKemandirianUT(halaman, filterKelas) {
+  const area = document.getElementById('kkRekapAreaUT');
+  if (!area) return;
+  const dropdownFilter = document.getElementById('kkFilterKelasUT');
+  if (filterKelas === undefined) filterKelas = dropdownFilter ? dropdownFilter.value : '';
+  else if (dropdownFilter) dropdownFilter.value = filterKelas;
+  let semua = [...(AppState.cache.kemandirianUTAll || [])].sort((a, b) => (Number(b.Total) || 0) - (Number(a.Total) || 0));
+  if (filterKelas) semua = semua.filter(r => r.Kelas === filterKelas);
+  const totalHalaman = Math.max(1, Math.ceil(semua.length / REKAP_PER_HALAMAN));
+  halaman = Math.min(Math.max(1, halaman), totalHalaman);
+  const mulai = (halaman - 1) * REKAP_PER_HALAMAN;
+  const rows = semua.slice(mulai, mulai + REKAP_PER_HALAMAN);
+  area.innerHTML = `
+    <div class="table-card">
+      <div style="overflow-x:auto;">
+      <table class="sipuma-table">
+        <thead><tr><th>Kode Unik</th><th>Nama UMKM</th><th>Nilai Total</th><th>Status Kemandirian (UT)</th><th>Bulan/Tahun Asesmen</th></tr></thead>
+        <tbody>${rows.length ? rows.map(r => `
+          <tr>
+            <td><b>${esc(r.IDUMKM)}</b></td>
+            <td>${esc(r.NamaUMKM)}</td>
+            <td>${esc(String(r.Total))}</td>
+            <td><span class="tier-score-pill tier-${tierClassUT(r.Kelas)}">${esc(r.Kelas)}</span></td>
+            <td>${formatBulanTahun(r.TanggalAsesmen)}</td>
+          </tr>`).join('') : `<tr><td colspan="5"><div class="table-empty"><i class="bi bi-inbox"></i>${filterKelas ? 'Tidak ada UMKM dengan status ini.' : 'Belum ada data asesmen versi UT.'}</div></td></tr>`}</tbody>
+      </table>
+      </div>
+    </div>
+    ${totalHalaman > 1 ? `
+    <div class="d-flex gap-2 mt-2" style="flex-wrap:wrap;">
+      ${Array.from({length: totalHalaman}, (_, i) => i + 1).map(p => `<button class="btn ${p === halaman ? 'btn-primary' : 'btn-outline'} btn-sm" onclick="renderRekapKemandirianUT(${p}, '${filterKelas}')">${p}</button>`).join('')}
+    </div>` : ''}
+  `;
+}
+
 function muatFormKemandirian(kodeUmkm) {
+  if (_versiAsesmen === 'UT') { muatFormKemandirianUT(kodeUmkm); return; }
   const area = document.getElementById('kkFormArea');
   // Pakai cache lokal per-UMKM dulu kalau sudah pernah dibuka di sesi ini —
   // menghindari harus menunggu RPC lagi setiap kali pindah-pindah UMKM
@@ -1019,6 +1136,184 @@ function renderFormKemandirianDenganData(kodeUmkm, d) {
     <button class="btn btn-primary btn-block" id="btnSimpanKK" onclick="simpanKemandirian('${kodeUmkm}')"><i class="bi bi-save"></i> Simpan Asesmen</button>
   `;
   previewKelas();
+}
+
+// ════════════════════════════════════════════════════════
+// FORMULIR ASESMEN VERSI UT
+// ════════════════════════════════════════════════════════
+function muatFormKemandirianUT(kodeUmkm) {
+  const area = document.getElementById('kkFormArea');
+  if (!area) return;
+  if (!AppState.cache.kemandirianUTPerUmkm) AppState.cache.kemandirianUTPerUmkm = {};
+  if (AppState.cache.kemandirianUTPerUmkm[kodeUmkm] !== undefined) {
+    renderFormKemandirianUT(kodeUmkm, AppState.cache.kemandirianUTPerUmkm[kodeUmkm]);
+    return;
+  }
+  area.innerHTML = `<div class="loading-inline"><div class="spinner"></div></div>`;
+  panggilServerAman('getKemandirianUTUMKM', [kodeUmkm], (res) => {
+    const d = res.success ? (parseJsonAman(res.data, null) || {}) : {};
+    AppState.cache.kemandirianUTPerUmkm[kodeUmkm] = d;
+    renderFormKemandirianUT(kodeUmkm, d);
+  }, () => {
+    area.innerHTML = `<div class="table-empty"><i class="bi bi-wifi-off"></i>Gagal memuat asesmen versi UT. <button class="btn btn-outline btn-sm mt-2" onclick="muatFormKemandirianUT('${kodeUmkm}')">Coba Lagi</button></div>`;
+  });
+}
+
+function renderFormKemandirianUT(kodeUmkm, d) {
+  const area = document.getElementById('kkFormArea');
+  if (!area) return;
+  const tglDefault = d.TanggalAsesmen ? formatBulanTahunUntukInput(d.TanggalAsesmen) : formatBulanTahunUntukInput(new Date());
+  const nilai = (v) => (v === 0 || v) ? v : '';
+
+  area.innerHTML = `
+    <div class="grid grid-2 mb-3">
+      <div class="form-group mb-0"><label class="form-label">Bulan & Tahun Asesmen</label><input type="month" class="form-control" id="kkTglAsesmen" value="${tglDefault}"></div>
+      <div class="form-group mb-0"><label class="form-label">Nama Asesor</label><input class="form-control" id="kkAsesor" value="${esc(d.Asesor || '')}" placeholder="Contoh: Siti Rahmawati"></div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">1. Indikator Kuantitatif</label>
+      <input type="text" inputmode="decimal" class="form-control" id="kkUtKuantitatif" value="${nilai(d.Kuantitatif)}" oninput="previewKelasUT()" placeholder="Contoh: 29,17">
+    </div>
+
+    <div class="form-group mb-2">
+      <label class="form-label">2. Indikator Kualitatif</label>
+      <div class="login-hint" style="margin-bottom:8px;">Dijumlahkan sendiri oleh sistem dari enam aspek di bawah.</div>
+      <div class="grid grid-2">
+        ${ASPEK_UT.map((a, i) => `
+          <div class="form-group mb-2">
+            <label class="form-label" style="font-weight:500;">${String.fromCharCode(97 + i)}. ${esc(a.label)}</label>
+            <input type="text" inputmode="decimal" class="form-control" id="kkUt_${a.kunci}" value="${nilai(d['Aspek_' + a.kunci])}" oninput="previewKelasUT()" placeholder="0,00">
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="panel mb-3" style="background:var(--canvas);" id="kkPreviewBoxUT">
+      <span class="text-muted" style="font-size:12.5px;">Hasil kelas akan tampil di sini setelah nilai diisi.</span>
+    </div>
+
+    <div class="form-group"><label class="form-label">Saran Program yang Harus Diikuti</label><textarea class="form-control" id="kkUtSaranProgram">${esc(d.SaranProgram || '')}</textarea></div>
+    <button class="btn btn-primary btn-block" id="btnSimpanKKUT" onclick="simpanKemandirianUT('${esc(kodeUmkm)}')"><i class="bi bi-save"></i> Simpan Asesmen Versi UT</button>
+  `;
+  previewKelasUT();
+}
+
+/**
+ * Baca seluruh isian versi UT dari layar.
+ *
+ * Kolomnya sengaja BUKAN input angka bawaan peramban, melainkan teks yang
+ * diurai sendiri. Alasannya praktis: nilai asesmen ditulis dengan koma
+ * (29,17), dan kolom angka bawaan menolak koma — isinya terbaca kosong.
+ * Akibatnya pengguna melihat kolom yang jelas-jelas terisi, tetapi dapat
+ * pesan "belum terisi" saat menyimpan, tanpa tahu apa yang salah.
+ *
+ * Di sini koma dan titik sama-sama diterima.
+ */
+function bacaIsianUT() {
+  const angka = (id) => {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    const teks = String(el.value).trim().replace(',', '.');
+    if (teks === '') return null;
+    const v = Number(teks);
+    return isNaN(v) ? null : v;
+  };
+  const hasil = { kuantitatif: angka('kkUtKuantitatif'), aspek: {} };
+  ASPEK_UT.forEach(function (a) { hasil.aspek[a.kunci] = angka('kkUt_' + a.kunci); });
+  return hasil;
+}
+
+function previewKelasUT() {
+  const box = document.getElementById('kkPreviewBoxUT');
+  if (!box) return;
+  const isi = bacaIsianUT();
+  const kuantitatif = isi.kuantitatif || 0;
+  let kualitatif = 0;
+  ASPEK_UT.forEach(function (a) { kualitatif += (isi.aspek[a.kunci] || 0); });
+  kualitatif = Math.round(kualitatif * 100) / 100;
+  const total = Math.round((kuantitatif + kualitatif) * 100) / 100;
+  const kelas = hitungKelasUT(total);
+
+  // Peringatan kelebihan nilai TIDAK menghalangi penyimpanan — skala tiap
+  // aspek belum tentu sama di semua formulir dinas, jadi memaksakannya
+  // justru berisiko menolak data yang sebenarnya benar.
+  const lebih = total > 100
+    ? `<div class="login-hint" style="color:var(--pemula-text);margin-top:8px;">Nilai total melebihi 100. Periksa kembali angkanya — skala kelas hanya sampai 100.</div>`
+    : '';
+
+  box.innerHTML = `
+    <div class="d-flex align-center gap-3" style="flex-wrap:wrap;">
+      <span class="tier-score-pill tier-${tierClassUT(kelas)}" style="font-size:13px;padding:6px 14px;">${kelas}</span>
+      <span style="font-size:12.5px;">Kuantitatif <b>${kuantitatif}</b> + Kualitatif <b>${kualitatif}</b> = Total <b>${total}</b> / 100</span>
+    </div>${lebih}`;
+}
+
+function simpanKemandirianUT(kodeUmkm) {
+  const btn = document.getElementById('btnSimpanKKUT');
+  const umkmObj = (AppState.cache.umkm || []).find(u => u.KodeUnik === kodeUmkm);
+  const isi = bacaIsianUT();
+
+  // Seluruh tujuh isian wajib terisi. Membiarkan salah satunya kosong lalu
+  // menganggapnya nol akan menghasilkan kelas yang SALAH tanpa ada tanda
+  // apa pun di layar — dan kelas itulah yang nanti dipakai mengambil
+  // keputusan pembinaan.
+  const kosong = [];
+  if (isi.kuantitatif === null) kosong.push('Indikator Kuantitatif');
+  ASPEK_UT.forEach(function (a) { if (isi.aspek[a.kunci] === null) kosong.push(a.label); });
+  if (kosong.length) {
+    showToast('Peringatan',
+      'Belum terisi atau bukan angka: ' + kosong.join(', ') + '. ' +
+      'Tulis angkanya saja, boleh memakai koma — contoh 29,17.', 'warning');
+    return;
+  }
+
+  const record = {
+    IDUMKM: kodeUmkm, NamaUMKM: umkmObj ? umkmObj.NamaUMKM : '',
+    Kuantitatif: isi.kuantitatif,
+    SaranProgram: document.getElementById('kkUtSaranProgram').value.trim(),
+    Asesor: document.getElementById('kkAsesor').value.trim(),
+    TanggalAsesmen: document.getElementById('kkTglAsesmen').value || formatBulanTahunUntukInput(new Date())
+  };
+  ASPEK_UT.forEach(function (a) { record['Aspek_' + a.kunci] = isi.aspek[a.kunci]; });
+
+  setBtnLoading(btn);
+  panggilServerAman('saveKemandirianUT', [record], (res) => {
+    resetBtn(btn);
+    if (res.success) {
+      const dataHasil = parseJsonAman(res.data, record);
+      showToast('Berhasil', res.message, 'success');
+      if (!AppState.cache.kemandirianUTPerUmkm) AppState.cache.kemandirianUTPerUmkm = {};
+      AppState.cache.kemandirianUTPerUmkm[kodeUmkm] = dataHasil;
+      if (AppState.cache.kemandirianUTAll) {
+        const idx = AppState.cache.kemandirianUTAll.findIndex(r => r.IDUMKM === kodeUmkm);
+        if (idx > -1) Object.assign(AppState.cache.kemandirianUTAll[idx], dataHasil);
+        else AppState.cache.kemandirianUTAll.push(dataHasil);
+        if (document.getElementById('kkRekapAreaUT')) renderRekapKemandirianUT(1);
+      }
+    } else showToast('Gagal', res.message, 'danger');
+  }, () => {
+    resetBtn(btn);
+    // Pola yang sama dengan versi YDBA: kanal yang barusan gagal menyimpan
+    // kemungkinan besar juga gagal membaca, jadi hasilnya dihitung sendiri
+    // di browser (rumus identik dengan server) lalu tampilan diperbarui —
+    // sambil mengatakan terus terang bahwa ini belum terverifikasi.
+    let kualitatif = 0;
+    ASPEK_UT.forEach(function (a) { kualitatif += isi.aspek[a.kunci]; });
+    kualitatif = Math.round(kualitatif * 100) / 100;
+    const total = Math.round((isi.kuantitatif + kualitatif) * 100) / 100;
+    const dataOptimis = Object.assign({}, record, {
+      Kualitatif: kualitatif, Total: total, Kelas: hitungKelasUT(total), TanggalAsesmen: new Date()
+    });
+    showToast('Kemungkinan Tersimpan', 'Server tidak memberi konfirmasi (gangguan koneksi), tapi data biasanya tetap tersimpan. Tampilan sudah diperbarui — silakan cek lagi nanti untuk memastikan.', 'warning');
+    if (!AppState.cache.kemandirianUTPerUmkm) AppState.cache.kemandirianUTPerUmkm = {};
+    AppState.cache.kemandirianUTPerUmkm[kodeUmkm] = dataOptimis;
+    if (AppState.cache.kemandirianUTAll) {
+      const idx = AppState.cache.kemandirianUTAll.findIndex(r => r.IDUMKM === kodeUmkm);
+      if (idx > -1) Object.assign(AppState.cache.kemandirianUTAll[idx], dataOptimis);
+      else AppState.cache.kemandirianUTAll.push(dataOptimis);
+      if (document.getElementById('kkRekapAreaUT')) renderRekapKemandirianUT(1);
+    }
+  });
 }
 
 function previewKelas() {
