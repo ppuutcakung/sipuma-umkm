@@ -882,15 +882,36 @@ function simpanTenagaKerja(kodeUmkm) {
 // ════════════════════════════════════════════════════════
 // MODUL: ASESMEN KELAS KEMANDIRIAN (Admin)
 // ════════════════════════════════════════════════════════
+/**
+ * Boleh MENGISI asesmen, atau hanya melihat?
+ *
+ * Halaman ini dipakai bersama oleh Admin dan Stakeholder. Isinya sama —
+ * panduan skala dan kedua tabel rekap — yang berbeda hanya kartu isiannya:
+ * Stakeholder tidak mendapatkannya sama sekali.
+ *
+ * Kartunya tidak sekadar disembunyikan, melainkan memang tidak digambar.
+ * Tombol yang hanya tersembunyi masih bisa ditekan lewat Console, dan
+ * meski Aturan Keamanan Firestore tetap menolaknya di server, pengguna
+ * terlanjur melihat pesan galat yang membingungkan.
+ */
+function bolehUbahKemandirian() {
+  const r = (AppState.session || {}).roleFS;
+  return r === 'admin' || r === 'superadmin';
+}
+
 function loadKemandirian() { ensureUmkmCacheThen(() => renderKemandirianForm(AppState.cache.umkm[0] ? AppState.cache.umkm[0].KodeUnik : '')); }
 
 function renderKemandirianForm(kodeUmkm) {
   const container = document.getElementById('app-container');
+  const bolehIsi = bolehUbahKemandirian();
   container.innerHTML = `
     ${pageHeader('Evaluasi Terstandarisasi', 'Asesmen', 'Kelas Kemandirian',
-      'Input skor 3 pilar (Produksi, Pemasaran, Keuangan). Sistem otomatis menghitung rata-rata & kelas kemandirian akhir.', '')}
-    ${spandukUmkmNonaktif(kodeUmkm)}
-    <div class="grid grid-1-2">
+      bolehIsi
+        ? 'Dua versi asesmen berdampingan: versi YDBA (3 pilar, dirata-rata) dan versi UT (kuantitatif + 6 aspek, dijumlahkan). Pilih versinya pada kartu isian.'
+        : 'Rekap kelas kemandirian UMKM binaan, versi YDBA dan versi UT. Tersedia untuk dilihat dan diekspor.', '')}
+    ${bolehIsi ? spandukUmkmNonaktif(kodeUmkm) : ''}
+    <div class="${bolehIsi ? 'grid grid-1-2' : ''}">
+      ${bolehIsi ? `
       <div class="panel">
         <div class="form-group"><label class="form-label">Pilih UMKM</label>${dropdownUmkmCari('kkUmkmSelect', kodeUmkm, "renderKemandirianForm(document.getElementById('kkUmkmSelect').value)")}</div>
         <div class="form-group"><label class="form-label">Versi Asesmen</label>
@@ -901,7 +922,7 @@ function renderKemandirianForm(kodeUmkm) {
           <div class="login-hint">Hasil kedua versi disimpan terpisah dan tidak saling menimpa. Masing-masing punya tabel rekapnya sendiri.</div>
         </div>
         <div id="kkFormArea"><div class="loading-inline"><div class="spinner"></div></div></div>
-      </div>
+      </div>` : ''}
       <div class="panel">
         <div class="panel-title">Panduan Skala Kelas</div>
         <div class="grid grid-2 mt-2">
@@ -943,7 +964,7 @@ function renderKemandirianForm(kodeUmkm) {
       </div>
     </div>
   `;
-  muatFormKemandirian(kodeUmkm);
+  if (bolehIsi) muatFormKemandirian(kodeUmkm);
   muatRekapKemandirian(1);
   muatRekapKemandirianUT(1);
 }

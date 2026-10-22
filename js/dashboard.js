@@ -123,6 +123,31 @@ function renderDashboardOrganisasi(d, role) {
       '</div>' +
     '</div>' +
 
+    // Distribusi kelas kemandirian versi UT — panel kedua, tepat di bawah
+    // panel versi YDBA. Sengaja dipisah, bukan digabung dalam satu panel:
+    // kedua versi memakai skala dan nama kelas yang berbeda, dan satu UMKM
+    // bisa punya kelas di keduanya. Menggabungkannya hanya akan membuat
+    // angkanya tampak saling menambah padahal tidak.
+    '<div class="panel mb-4">' +
+      '<div class="flex-between" style="flex-wrap:wrap;gap:8px;">' +
+        '<div><div class="panel-title mb-0">Distribusi Kelas Kemandirian — Versi UT</div>' +
+        '<div class="panel-sub mb-0">' + (d.totalUMKMDenganKelasUT || 0) + ' UMKM telah diasesmen versi UT — bersumber dari tab Asesmen Kemandirian</div></div>' +
+      '</div>' +
+      '<div class="grid grid-4 mt-3">' +
+        KELAS_UT.map(function (k) {
+          const jml = (d.distribusiKelasUT || {})[k.nama] || 0;
+          const persen = d.totalUMKMDenganKelasUT ? Math.round(jml / d.totalUMKMDenganKelasUT * 100) : 0;
+          return '<div style="padding:12px;background:var(--canvas);border-radius:10px;">' +
+            '<div class="d-flex flex-between" style="font-size:12.5px;margin-bottom:6px;">' +
+              '<span class="tier-name"><span class="dot dot-' + tierClassUT(k.nama) + '"></span>' + esc(k.nama) + '</span>' +
+              '<b>' + jml + '</b></div>' +
+            '<div class="progress-track"><div class="progress-fill tier-' + tierClassUT(k.nama) + '" style="width:' + persen + '%;"></div></div>' +
+            '<div class="text-muted mt-2" style="font-size:11px;">' + persen + '% dari total &middot; nilai ' + esc(k.teks) + '</div>' +
+          '</div>';
+        }).join('') +
+      '</div>' +
+    '</div>' +
+
     '<div class="grid grid-2">' +
       '<div class="panel">' +
         '<div class="flex-between mb-3">' +

@@ -1354,13 +1354,13 @@ async function susunDashboardOrganisasi(tahunDiminta) {
   // kuota harian Firestore.
   const saringTahun = function (q) { return q.where('tahun', '==', tahun); };
 
-  const [umkmR, omsetTh, tkTh, kelasR, fasR, presR, lapR, legR] = await Promise.all([
+  const [umkmR, omsetTh, tkTh, kelasR, fasR, presR, lapR, legR, kelasUTR] = await Promise.all([
     ambilKoleksi('umkm'),
     ambilKoleksi('omset', saringTahun, 'th' + tahun),
     ambilKoleksi('tenagaKerja', saringTahun, 'th' + tahun),
     ambilKoleksi('kemandirian'), ambilKoleksi('fasilitasi'),
     ambilKoleksi('prestasi'), ambilKoleksi('laporanCsr'),
-    ambilKoleksi('legalitas')
+    ambilKoleksi('legalitas'), ambilKoleksi('kemandirianUT')
   ]);
 
   const aktif = umkmR.filter(function (u) { return u.statusAktif !== false; });
@@ -1406,6 +1406,17 @@ async function susunDashboardOrganisasi(tahunDiminta) {
   const distribusiKelas = { 'Pemula': 0, 'Madya': 0, 'Pra Mandiri': 0, 'Mandiri': 0 };
   const kelasAktif = kelasR.filter(hanyaAktif);
   kelasAktif.forEach(function (k) { if (distribusiKelas[k.kelas] !== undefined) distribusiKelas[k.kelas]++; });
+
+  // Sebaran kelas versi UT — dihitung terpisah dan TIDAK dicampur dengan
+  // sebaran versi YDBA di atas. Satu UMKM bisa punya kelas di kedua versi
+  // sekaligus, jadi menjumlahkan keduanya akan menghasilkan angka yang
+  // lebih besar daripada jumlah UMKM yang sebenarnya.
+  const distribusiKelasUT = {};
+  KELAS_UT.forEach(function (k) { distribusiKelasUT[k.nama] = 0; });
+  const kelasUTAktif = kelasUTR.filter(hanyaAktif);
+  kelasUTAktif.forEach(function (k) {
+    if (distribusiKelasUT[k.kelas] !== undefined) distribusiKelasUT[k.kelas]++;
+  });
 
   const jumlahPrestasi = {};
   presR.filter(hanyaAktif).forEach(function (p) {
@@ -1455,6 +1466,13 @@ async function susunDashboardOrganisasi(tahunDiminta) {
     targetFasilitasi: Number(cfg.targetFasilitasiTahunan) || 0,
     distribusiKelas: distribusiKelas,
     totalUMKMDenganKelas: kelasAktif.length || 1,
+    distribusiKelasUT: distribusiKelasUT,
+    // Berbeda dengan baris di atasnya, angka ini TIDAK dipaksa minimal 1.
+    // Nilai 1 di sana dulu dipakai menghindari pembagian dengan nol, tetapi
+    // akibatnya dasbor berbunyi "1 UMKM telah diasesmen" padahal belum ada
+    // satu pun. Pembagiannya sudah dijaga di sisi tampilan, jadi di sini
+    // cukup angka yang sebenarnya.
+    totalUMKMDenganKelasUT: kelasUTAktif.length,
     prestasiTerbaru: prestasiTerbaru,
     laporanTerbaru: lapR.map(laporanKeLama)
       .sort(function (x, y) { return new Date(y.TanggalUpload) - new Date(x.TanggalUpload); }).slice(0, 5),

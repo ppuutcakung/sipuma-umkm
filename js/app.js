@@ -17,6 +17,17 @@ function renderShellPeran() {
     if (sisip > -1) menu.splice(sisip + 1, 0, item); else menu.push(item);
   }
 
+  // Tab "Asesmen Kemandirian" untuk Stakeholder — hanya lihat dan ekspor,
+  // kedua versi (YDBA dan UT) sekaligus. Memakai id yang SAMA dengan menu
+  // Admin, jadi tidak perlu jalur navigasi baru; pembatasannya ada pada
+  // bolehUbahKemandirian() di halaman.js. Diletakkan setelah Tenaga Kerja,
+  // mengikuti urutan yang sudah dipakai di menu Admin.
+  if (s.role === 'UT' && !menu.some(function (m) { return m.id === 'kemandirian'; })) {
+    const sisip = menu.findIndex(function (m) { return m.id === 'tenagaKerjaUT'; });
+    const item = { id: 'kemandirian', label: 'Asesmen Kemandirian', icon: 'bi-award-fill' };
+    if (sisip > -1) menu.splice(sisip + 1, 0, item); else menu.push(item);
+  }
+
   // Tab "Peta Sebaran UMKM" untuk Admin dan Stakeholder, diletakkan tepat
   // di bawah menu laporan pada kedua peran.
   if ((s.role === 'Admin' || s.role === 'UT') &&
