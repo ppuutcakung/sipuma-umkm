@@ -403,7 +403,7 @@ function renderOmsetForm(role, kodeUmkm) {
       <div class="grid grid-2 mb-3">
         ${role === 'Admin' ? `
         <div class="form-group mb-0"><label class="form-label">Pilih UMKM</label>
-          ${dropdownUmkmCari('omsetUmkmSelect', kodeUmkm, "renderOmsetForm('Admin', document.getElementById('omsetUmkmSelect').value)")}
+          ${dropdownUmkmCari('omsetUmkmSelect', kodeUmkm, function () { renderOmsetForm('Admin', document.getElementById('omsetUmkmSelect').value); })}
         </div>` : `<div></div>`}
         <div class="form-group mb-0"><label class="form-label">Tahun</label>
           <select class="form-select" id="omsetTahunSelect" onchange="gantiTahunOmset('${role}')">${optionsHtml([2025,2026,2027], tahun)}</select>
@@ -699,7 +699,7 @@ function renderTenagaKerjaForm(role, kodeUmkm) {
     <div class="grid grid-1-2">
       <div class="panel">
         <div class="panel-title mb-3">Form Input</div>
-        ${role === 'Admin' ? `<div class="form-group"><label class="form-label">Pilih UMKM</label>${dropdownUmkmCari('tkUmkmSelect', kodeUmkm, "renderTenagaKerjaForm('Admin', document.getElementById('tkUmkmSelect').value)")}</div>` : ''}
+        ${role === 'Admin' ? `<div class="form-group"><label class="form-label">Pilih UMKM</label>${dropdownUmkmCari('tkUmkmSelect', kodeUmkm, function () { renderTenagaKerjaForm('Admin', document.getElementById('tkUmkmSelect').value); })}</div>` : ''}
         <div class="grid grid-2">
           <div class="form-group"><label class="form-label">Bulan</label><select class="form-select" id="tkBulan">${optionsHtml(BULAN_LIST)}</select></div>
           <div class="form-group"><label class="form-label">Tahun</label><select class="form-select" id="tkTahun" onchange="muatPanelClosing('${kodeUmkm}', this.value, 'TenagaKerja', 'closingTkArea'); muatTabelTenagaKerja('${kodeUmkm}', this.value);">${optionsHtml([2025,2026,2027], tahun)}</select></div>
@@ -913,7 +913,7 @@ function renderKemandirianForm(kodeUmkm) {
     <div class="${bolehIsi ? 'grid grid-1-2' : ''}">
       ${bolehIsi ? `
       <div class="panel">
-        <div class="form-group"><label class="form-label">Pilih UMKM</label>${dropdownUmkmCari('kkUmkmSelect', kodeUmkm, "renderKemandirianForm(document.getElementById('kkUmkmSelect').value)")}</div>
+        <div class="form-group"><label class="form-label">Pilih UMKM</label>${dropdownUmkmCari('kkUmkmSelect', kodeUmkm, function () { renderKemandirianForm(document.getElementById('kkUmkmSelect').value); })}</div>
         <div class="form-group"><label class="form-label">Versi Asesmen</label>
           <select class="form-select" id="kkVersi" onchange="gantiVersiAsesmen()">
             <option value="YDBA"${_versiAsesmen === 'YDBA' ? ' selected' : ''}>Versi YDBA — 3 pilar (Produksi, Pemasaran, Keuangan)</option>

@@ -145,12 +145,43 @@ function areaGagal(pesan, fungsiCobaLagi) {
 // ════════════════════════════════════════════════════════
 // Pengganti <select> biasa. Elemen dengan id={id} adalah <input hidden>
 // yang tetap punya properti .value — jadi dibaca persis seperti <select>.
-function dropdownUmkmCari(id, selectedKode, onSelectJsExpr, disabled) {
+// Aksi yang dijalankan ketika sebuah UMKM dipilih, disimpan per id.
+//
+// Dulu aksinya dititipkan sebagai TEKS pada atribut data-onselect, lalu
+// dijalankan dengan new Function(teks). Itu bentuk lain dari eval —
+// menjalankan teks sebagai perintah — dan Content-Security-Policy
+// memblokirnya, dengan benar: jalan itulah yang paling sering dipakai
+// kode sisipan untuk berjalan di halaman orang lain.
+//
+// Akibat blokir itu nyata: memilih UMKM di Input Omset dan Input Tenaga
+// Kerja tidak lagi memindahkan datanya, dan di layar tidak ada tanda apa
+// pun bahwa ada yang salah.
+//
+// Sekarang aksinya disimpan sebagai FUNGSI sungguhan di sini, lalu
+// dipanggil langsung. Tidak ada teks yang dijalankan sebagai perintah,
+// sehingga CSP tidak perlu dilonggarkan sedikit pun.
+//
+// ⚠️ JANGAN kembali mengirim aksi sebagai teks. Kalau itu terjadi,
+// peringatan di bawah akan muncul di Console dan aksinya diabaikan —
+// sengaja berisik, supaya ketahuan saat diuji, bukan diam-diam mati.
+const _aksiDropdownUmkm = {};
+
+function dropdownUmkmCari(id, selectedKode, onSelect, disabled) {
+  if (typeof onSelect === 'function') {
+    _aksiDropdownUmkm[id] = onSelect;
+  } else {
+    delete _aksiDropdownUmkm[id];
+    if (onSelect) {
+      console.warn('Dropdown UMKM "' + id + '": aksi dikirim sebagai teks, jadi TIDAK dijalankan. ' +
+                   'Kirimkan sebagai fungsi, misalnya function () { ... }.');
+    }
+  }
+
   const list = AppState.cache.umkm || [];
   const obj = list.find(function (u) { return u.KodeUnik === selectedKode; });
   const namaTampil = obj ? (obj.NamaUMKM + ' (' + obj.KodeUnik + ')') : '';
   return '<div class="umkm-search-select" style="position:relative;">' +
-    '<input type="hidden" id="' + id + '" value="' + (selectedKode ? esc(selectedKode) : '') + '" data-onselect="' + esc(onSelectJsExpr || '') + '">' +
+    '<input type="hidden" id="' + id + '" value="' + (selectedKode ? esc(selectedKode) : '') + '">' +
     '<div class="input-group-icon"><i class="bi bi-search"></i>' +
     '<input type="text" class="form-control" id="' + id + '_cari" value="' + esc(namaTampil) + '" placeholder="Ketik nama UMKM untuk mencari..." autocomplete="off"' + (disabled ? ' disabled' : '') +
     ' oninput="renderDropdownUmkmList(\'' + id + '\', this.value)" onfocus="renderDropdownUmkmList(\'' + id + '\', this.value)"></div>' +
@@ -185,8 +216,13 @@ function pilihDropdownUmkm(id, kode) {
   hidden.value = kode;
   if (cari) cari.value = obj ? (obj.NamaUMKM + ' (' + obj.KodeUnik + ')') : '';
   if (listEl) listEl.classList.remove('show');
-  const aksi = hidden.getAttribute('data-onselect');
-  if (aksi) { try { (new Function(aksi))(); } catch (e) { console.error('Dropdown UMKM:', e); } }
+  // Nilai tersembunyi SUDAH diisi di atas sebelum aksi dipanggil, jadi
+  // aksi yang membaca document.getElementById(id).value tetap mendapat
+  // kode UMKM yang baru — persis seperti perilaku sebelumnya.
+  const aksi = _aksiDropdownUmkm[id];
+  if (typeof aksi === 'function') {
+    try { aksi(kode); } catch (e) { console.error('Dropdown UMKM:', e); }
+  }
 }
 
 document.addEventListener('click', function (e) {
